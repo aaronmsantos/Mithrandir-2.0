@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 # --- Setup Typer and Rich ---
-app = typer.Typer(help="🛡️ Mithrandir 2.0 Operator Harness CLI ⚡️")
+app = typer.Typer(help="🔮 Mithrandir 2.0 Operator Harness CLI 🪄")
 console = Console()
 
 # --- Logging Configuration (Stderr Only) ---
@@ -102,7 +102,7 @@ def doctor():
     env_vars = load_env()
     
     # Diagnostic Table
-    table = Table(title="🛡️ Mithrandir 2.0 Diagnostics Report", show_header=True, header_style="bold magenta")
+    table = Table(title="🔮 Mithrandir 2.0 Diagnostics Report", show_header=True, header_style="bold magenta")
     table.add_column("Check Component", style="cyan")
     table.add_column("Status", style="bold")
     table.add_column("Details", style="white")
@@ -159,7 +159,7 @@ def doctor():
     console.print(table)
     console.print(Panel(
         "[bold green]System check complete![/bold green] Keep maintaining clean state and secure journals. ⚡️",
-        title="🛡️ Diagnostic Status",
+        title="🔮 Diagnostic Status",
         expand=False
     ))
 

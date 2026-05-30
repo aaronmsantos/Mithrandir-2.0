@@ -27,8 +27,41 @@ from domains.work import WorkDomain
 from domains.projects import ProjectsDomain
 
 # Initialize Typer and Rich Console
-app = typer.Typer(help="🛡️ Mithrandir 2.0 Command Line Interface ⚡️", rich_markup_mode="rich")
+app = typer.Typer(help="🔮 Mithrandir 2.0 Command Line Interface ✨", rich_markup_mode="rich")
 console = Console()
+
+def audit_and_confirm(category: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+    """Audits proposed memory entry against L2 Playbook rules and asks user to confirm if drift detected."""
+    from core.memory.sentinel import DriftSentinel
+    sentinel = DriftSentinel()
+    try:
+        violations = sentinel.audit_entry(category, content, metadata)
+    except Exception as e:
+        console.print(f"[dim yellow]⚠️ Sentinel audit check encountered an error: {e}. Proceeding...[/dim yellow]")
+        return True
+
+    if not violations:
+        return True
+
+    table = Table(show_header=True, header_style="bold red", box=None)
+    table.add_column("Rule Violated", style="cyan")
+    table.add_column("Justification", style="white")
+    table.add_column("Severity", style="yellow")
+
+    for v in violations:
+        table.add_row(
+            v.get("rule", "Unknown rule"),
+            v.get("justification", "No justification provided."),
+            v.get("severity", "WARNING")
+        )
+
+    console.print(Panel(
+        table,
+        title="🔮 [bold red]Sentinel Warning: Cognitive Drift Detected[/bold red] 🔮",
+        border_style="red"
+    ))
+
+    return typer.confirm("Do you want to proceed with storing this entry despite the drift?", default=False)
 
 # Sub-command groups
 journal_app = typer.Typer(name="journal", help="📓 Manage your encrypted personal journal entries.")
@@ -52,7 +85,7 @@ app.add_typer(projects_app)
 
 @app.command("doctor")
 def doctor():
-    """🛡️ Run Mithrandir 2.0 system diagnostics checker."""
+    """🔮 Run Mithrandir 2.0 system diagnostics checker."""
     console.print("[bold cyan]🩺 Initializing Mithrandir 2.0 Doctor...[/bold cyan]")
     harness_doctor()
 
@@ -137,9 +170,26 @@ Please provide a helpful, concise, and high-energy response based on the recalle
         console.print(f"[bold green]Mithrandir:[/bold green] {response_text}\n")
         
         # 4. Save conversation turn as chat memory
+        chat_turn_content = f"User: {user_input}\nAgent: {response_text}"
+        
+        # Run non-blocking Sentinel audit
+        from core.memory.sentinel import DriftSentinel
+        try:
+            sentinel = DriftSentinel()
+            violations = sentinel.audit_entry("chat", chat_turn_content, {"type": "chat_turn"})
+            if violations:
+                console.print("\n[bold yellow]🔮 Sentinel: Cognitive drift detected in chat history![/bold yellow]")
+                for v in violations:
+                    console.print(f"  [cyan]* Rule Violated:[/cyan] {v.get('rule')}")
+                    console.print(f"    [dim]Justification:[/dim] {v.get('justification')}")
+                console.print("")
+        except Exception as e:
+            # Silently ignore sentinel check failures in chat loop
+            pass
+            
         manager.add_memory(
             category="chat",
-            content=f"User: {user_input}\nAgent: {response_text}",
+            content=chat_turn_content,
             metadata={"type": "chat_turn"}
         )
 
@@ -167,6 +217,11 @@ def journal_write(
                 console.print("[bold red]Please enter an integer between 1 and 10.[/bold red]")
             except ValueError:
                 console.print("[bold red]Invalid input. Please enter an integer between 1 and 10.[/bold red]")
+
+    # Run audit check
+    if not audit_and_confirm("journal", content, {"mood_score": mood}):
+        console.print("[bold yellow]❌ Aborted journal write to prevent cognitive drift.[/bold yellow]")
+        raise typer.Exit(code=1)
     
     # Decrypted/In-memory review
     console.print(Panel(
@@ -179,7 +234,7 @@ def journal_write(
     personal = PersonalDomain()
     memory_id = personal.add_journal_entry(content=content, mood_score=mood)
     
-    console.print(f"[bold green]✨ Success![/bold green] Journal entry safely encrypted and stored (Memory ID: {memory_id}). 🛡️")
+    console.print(f"[bold green]✨ Success![/bold green] Journal entry safely encrypted and stored (Memory ID: {memory_id}). 🔮")
 
 
 @journal_app.command("list")
@@ -284,6 +339,11 @@ def invest_calculate(
         volume_divergence=volume
     )
     
+    # Run sentinel audit
+    if not audit_and_confirm("investing", report["justification"], report["ratings"]):
+        console.print("[bold yellow]❌ Aborted saving confluence report to prevent cognitive drift.[/bold yellow]")
+        raise typer.Exit(code=1)
+        
     memory_id = investing.save_confluence_report(report)
     
     # Output to Console
@@ -413,6 +473,24 @@ def travel_add(
     acts = [x.strip() for x in activities.split(",") if x.strip()]
     packs = [x.strip() for x in packing_list.split(",") if x.strip()]
     
+    # Format content for audit
+    travel_content = (
+        f"Trip Itinerary to {destination} from {start_date} to {end_date}.\n"
+        f"Planned Activities: {', '.join(acts)}\n"
+        f"Packing List: {', '.join(packs)}"
+    )
+    travel_metadata = {
+        "destination": destination,
+        "start_date": start_date,
+        "end_date": end_date,
+        "activities": acts,
+        "packing_list": packs
+    }
+    
+    if not audit_and_confirm("travel", travel_content, travel_metadata):
+        console.print("[bold yellow]❌ Aborted saving itinerary to prevent cognitive drift.[/bold yellow]")
+        raise typer.Exit(code=1)
+        
     travel = TravelDomain()
     memory_id = travel.add_itinerary(destination, start_date, end_date, acts, packs)
     console.print(f"[bold green]✈️ Success![/bold green] Itinerary logged under travel (Memory ID: {memory_id}).")
@@ -468,6 +546,23 @@ def work_add(
         due = typer.prompt("Due Date (YYYY-MM-DD)")
     if not priority:
         priority = typer.prompt("Priority (High/Medium/Low)")
+
+    work_content = (
+        f"Work Task: {task} (Priority: {priority}, Status: {status})\n"
+        f"Description: {desc}\n"
+        f"Due Date: {due}"
+    )
+    work_metadata = {
+        "task_name": task,
+        "description": desc,
+        "status": status,
+        "due_date": due,
+        "priority": priority
+    }
+    
+    if not audit_and_confirm("work", work_content, work_metadata):
+        console.print("[bold yellow]❌ Aborted saving work task to prevent cognitive drift.[/bold yellow]")
+        raise typer.Exit(code=1)
 
     work = WorkDomain()
     memory_id = work.add_task(task, desc, status, due, priority)
@@ -527,6 +622,23 @@ def projects_add(
     if not status:
         status = typer.prompt("Status")
 
+    project_content = (
+        f"Project: {project} | Task: {task}\n"
+        f"Complexity: {complexity} | Status: {status}\n"
+        f"Description: {desc}"
+    )
+    project_metadata = {
+        "project_name": project,
+        "task_name": task,
+        "complexity": complexity,
+        "description": desc,
+        "status": status
+    }
+    
+    if not audit_and_confirm("projects", project_content, project_metadata):
+        console.print("[bold yellow]❌ Aborted saving project task to prevent cognitive drift.[/bold yellow]")
+        raise typer.Exit(code=1)
+
     projects = ProjectsDomain()
     memory_id = projects.add_project_task(project, task, complexity, desc, status)
     console.print(f"[bold green]🚀 Success![/bold green] AI sprint task logged (Memory ID: {memory_id}).")
@@ -569,7 +681,7 @@ def projects_list():
 def run(
     domain: str = typer.Argument(..., help="Domain to run: travel, work, or projects")
 ):
-    """🛡️ Run interactive CLI loops for travel, work, or projects."""
+    """🔮 Run interactive CLI loops for travel, work, or projects."""
     dom = domain.strip().lower()
     
     if dom == "travel":

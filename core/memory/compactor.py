@@ -28,7 +28,7 @@ if not logger.handlers:
     logger.propagate = False
 
 # --- CLI App Setup ---
-app = typer.Typer(help="🛡️ Mithrandir 2.0 Memory Compactor CLI ⚡️")
+app = typer.Typer(help="🔮 Mithrandir 2.0 Memory Compactor CLI 🪄")
 
 # --- LLM API Call Helper ---
 def _call_llm_api(prompt: str) -> Optional[str]:

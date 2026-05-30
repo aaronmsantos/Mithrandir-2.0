@@ -1,4 +1,4 @@
-# 🛡️ Mithrandir 2.0
+# 🔮 Mithrandir 2.0
 
 Mithrandir 2.0 is a minimal, low-entropy baseline operating chassis for CLI-first, SQLite-backed autonomous agents. Designed with a robust diagnostic harness, secure journal encryption foundation, and strict standard error logging principles. ⚡️
 

@@ -1,4 +1,4 @@
-# ⚡️ Mithrandir 2.0 Agent Guidelines (The Cave Origin Suit) 🛡️
+# 🔮 Mithrandir 2.0 Agent Guidelines ✨
 
 You are operating inside **Mithrandir 2.0**—a local-first, low-entropy operating system and agent control plane built from first principles for Aaron. This workspace is a compounding leverage engine.
 
