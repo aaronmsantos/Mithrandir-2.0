@@ -1,0 +1,611 @@
+import os
+import sys
+from pathlib import Path
+
+# Add project root directory to sys.path to allow execution of scripts directly
+_root = Path(__file__).resolve().parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from typing import Any, Dict, List, Optional
+import typer
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+
+# Import core functionalities
+from core.harness import doctor as harness_doctor
+from core.memory.manager import MemoryManager
+from core.memory.compactor import MemoryCompactor, _call_llm_api
+from core.memory.fenced_context import get_fenced_context
+
+# Import domain modules
+from domains.personal import PersonalDomain
+from domains.investing import InvestingDomain
+from domains.travel import TravelDomain
+from domains.work import WorkDomain
+from domains.projects import ProjectsDomain
+
+# Initialize Typer and Rich Console
+app = typer.Typer(help="🛡️ Mithrandir 2.0 Command Line Interface ⚡️", rich_markup_mode="rich")
+console = Console()
+
+# Sub-command groups
+journal_app = typer.Typer(name="journal", help="📓 Manage your encrypted personal journal entries.")
+invest_app = typer.Typer(name="invest", help="📈 Run market analysis using the Confluence Framework.")
+memory_app = typer.Typer(name="memory", help="🧠 Memory compaction and maintenance.")
+prompt_app = typer.Typer(name="prompt", help="💬 Prompt translation and Machine English optimization.")
+travel_app = typer.Typer(name="travel", help="✈️ Track travel itineraries and packing lists.")
+work_app = typer.Typer(name="work", help="💼 Track weekly work tasks and deliverables.")
+projects_app = typer.Typer(name="projects", help="🚀 Manage AI sprint backlogs and project tasks.")
+
+app.add_typer(journal_app)
+app.add_typer(invest_app)
+app.add_typer(memory_app)
+app.add_typer(prompt_app)
+app.add_typer(travel_app)
+app.add_typer(work_app)
+app.add_typer(projects_app)
+
+
+# --- Root Commands ---
+
+@app.command("doctor")
+def doctor():
+    """🛡️ Run Mithrandir 2.0 system diagnostics checker."""
+    console.print("[bold cyan]🩺 Initializing Mithrandir 2.0 Doctor...[/bold cyan]")
+    harness_doctor()
+
+
+@app.command("compact")
+def compact(
+    limit: int = typer.Option(50, help="Number of recent memories to analyze.")
+):
+    """🧠 Run Mithrandir 2.0 Memory Compaction loop (extracts rules to playbook)."""
+    console.print("[bold magenta]⚡️ Launching Memory Compaction loop...[/bold magenta]")
+    compactor = MemoryCompactor()
+    try:
+        updated = compactor.run_compaction(limit=limit)
+        console.print(Panel(
+            f"🧠 Memory compaction completed successfully.\n[bold green]Playbook topics updated/reconciled:[/bold green] {updated}",
+            title="🧠 Compactor Status",
+            border_style="magenta",
+            expand=False
+        ))
+    except Exception as e:
+        console.print(f"[bold red]❌ Error executing memory compactor: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+@app.command("chat")
+def chat():
+    """💬 Interactive agent-first chat experience with fenced context recall."""
+    console.print(Panel(
+        "Welcome to the [bold cyan]Mithrandir 2.0 Fenced Context Chat Loop[/bold cyan]! 🤖\n"
+        "Ask anything. Mithrandir will query the durable memory layer to find relevant past logs and guidelines,\n"
+        "display them in a fenced block, and use them to construct a personalized response.\n\n"
+        "Type [bold red]exit[/bold red] or [bold red]quit[/bold red] to end the chat session.",
+        title="⚡️ Mithrandir Interactive Chat ⚡️",
+        border_style="cyan"
+    ))
+    
+    manager = MemoryManager()
+    
+    while True:
+        try:
+            user_input = typer.prompt("You")
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[bold red]Ending chat session. Bye! 👋[/bold red]")
+            break
+            
+        if user_input.strip().lower() in ["exit", "quit"]:
+            console.print("[bold red]Ending chat session. Bye! 👋[/bold red]")
+            break
+            
+        if not user_input.strip():
+            continue
+            
+        # 1. Retrieve fenced context
+        fenced_context = get_fenced_context(query=user_input)
+        
+        # 2. Print fenced context block
+        console.print(Panel(
+            fenced_context,
+            title="🔍 Recalled Fenced Context",
+            border_style="yellow",
+            padding=(1, 2)
+        ))
+        
+        # 3. Generate response using LLM or local fallback
+        chat_prompt = f"""You are Mithrandir 2.0, an advanced personal system architect.
+Here is the recalled context from our durable memory layer:
+{fenced_context}
+
+The user is saying: "{user_input}"
+
+Please provide a helpful, concise, and high-energy response based on the recalled context. Keep it short and to the point.
+"""
+        console.print("[dim cyan]Mithrandir thinking...[/dim cyan]")
+        response_text = _call_llm_api(chat_prompt)
+        
+        if not response_text:
+            response_text = (
+                "⚡️ [Mithrandir local mode] I have successfully recalled your context (displayed above) but "
+                "no external LLM API keys are configured (or API call timed out). I've securely logged this chat turn!"
+            )
+            
+        console.print(f"[bold green]Mithrandir:[/bold green] {response_text}\n")
+        
+        # 4. Save conversation turn as chat memory
+        manager.add_memory(
+            category="chat",
+            content=f"User: {user_input}\nAgent: {response_text}",
+            metadata={"type": "chat_turn"}
+        )
+
+
+# --- Journal Subcommands ---
+
+@journal_app.command("add")
+@journal_app.command("write")
+def journal_write(
+    content: Optional[str] = typer.Option(None, "--content", "-c", help="Journal entry content"),
+    mood: Optional[int] = typer.Option(None, "--mood", "-m", help="Mood score (1-10)"),
+):
+    """📓 Add a new journal entry (decrypted review in-memory, stored encrypted on disk)."""
+    console.print("[bold magenta]📓 Creating a New Journal Entry[/bold magenta]")
+    
+    if not content:
+        content = typer.prompt("What's on your mind? (thoughts/feelings)")
+    if not mood:
+        while True:
+            try:
+                mood_input = typer.prompt("Rate your mood (1-10)")
+                mood = int(mood_input)
+                if 1 <= mood <= 10:
+                    break
+                console.print("[bold red]Please enter an integer between 1 and 10.[/bold red]")
+            except ValueError:
+                console.print("[bold red]Invalid input. Please enter an integer between 1 and 10.[/bold red]")
+    
+    # Decrypted/In-memory review
+    console.print(Panel(
+        f"[bold]Mood Score:[/bold] {mood}/10\n[bold]Content:[/bold] {content}",
+        title="🔑 [yellow]In-Memory Plaintext Review (Pre-encryption)[/yellow]",
+        border_style="yellow"
+    ))
+    
+    # Save (calling memory manager Fernet encryptor internally)
+    personal = PersonalDomain()
+    memory_id = personal.add_journal_entry(content=content, mood_score=mood)
+    
+    console.print(f"[bold green]✨ Success![/bold green] Journal entry safely encrypted and stored (Memory ID: {memory_id}). 🛡️")
+
+
+@journal_app.command("list")
+def journal_list(
+    query: Optional[str] = typer.Option(None, "--query", "-q", help="Optional search string to filter entries")
+):
+    """📓 List decrypted journal entries (supports filtering by query)."""
+    personal = PersonalDomain()
+    entries = personal.list_journal_entries(query=query)
+    
+    if not entries:
+        console.print("[bold yellow]No journal entries found matching criteria. 📓[/bold yellow]")
+        return
+        
+    table = Table(title="📓 Decrypted Journal Entries", show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="cyan")
+    table.add_column("Timestamp", style="green")
+    table.add_column("Mood Score", style="yellow")
+    table.add_column("Content (Decrypted in Memory)", style="white")
+    
+    for e in entries:
+        mood = e["metadata"].get("mood_score", "N/A")
+        table.add_row(
+            str(e["id"]),
+            e["timestamp"],
+            f"{mood}/10",
+            e["content"]
+        )
+    console.print(table)
+
+
+@journal_app.command("search")
+def journal_search(
+    query: str = typer.Argument(..., help="Search query to match decrypted content in-memory")
+):
+    """📓 Search decrypted journal entries for a search term."""
+    journal_list(query=query)
+
+
+# --- Invest Subcommands ---
+
+@invest_app.command("calculate")
+def invest_calculate(
+    tom_lee: Optional[float] = typer.Option(None, "--tom-lee", help="Tom Lee pivot stance (1-10)"),
+    cpi: Optional[float] = typer.Option(None, "--cpi", help="CPI/liquidity trend (1-10)"),
+    flows: Optional[float] = typer.Option(None, "--flows", help="ETF flows (1-10)"),
+    fintwit: Optional[float] = typer.Option(None, "--fintwit", help="FinTwit velocity (1-10)"),
+    cnbc: Optional[float] = typer.Option(None, "--cnbc", help="CNBC amplitude (1-10)"),
+    skeptics: Optional[float] = typer.Option(None, "--skeptics", help="Skeptic flow (1-10)"),
+    sr: Optional[float] = typer.Option(None, "--sr", help="Support/Resistance alignment (1-10)"),
+    momentum: Optional[float] = typer.Option(None, "--momentum", help="Momentum slope (1-10)"),
+    volume: Optional[float] = typer.Option(None, "--volume", help="Volume divergence (1-10)"),
+):
+    """📈 Calculate Confluence Score and save investing recommendation report."""
+    console.print("[bold green]📈 Mithrandir Confluence Framework Calculator[/bold green]")
+    
+    def prompt_score(name: str) -> float:
+        while True:
+            try:
+                val = float(typer.prompt(name))
+                if 1.0 <= val <= 10.0:
+                    return val
+                console.print("[bold red]Score must be between 1.0 and 10.0.[/bold red]")
+            except ValueError:
+                console.print("[bold red]Please enter a valid number.[/bold red]")
+
+    # Prompt if parameters are missing
+    if tom_lee is None:
+        console.print("\n[bold cyan]--- Macro Indicators ---[/bold cyan]")
+        tom_lee = prompt_score("Tom Lee pivot stance (1-10)")
+    if cpi is None:
+        cpi = prompt_score("CPI/liquidity trend (1-10)")
+    if flows is None:
+        flows = prompt_score("ETF flows (1-10)")
+        
+    if fintwit is None:
+        console.print("\n[bold cyan]--- Sentiment Indicators ---[/bold cyan]")
+        fintwit = prompt_score("FinTwit velocity (1-10)")
+    if cnbc is None:
+        cnbc = prompt_score("CNBC amplitude (1-10)")
+    if skeptics is None:
+        skeptics = prompt_score("Skeptic flow (1-10)")
+        
+    if sr is None:
+        console.print("\n[bold cyan]--- Technical Indicators ---[/bold cyan]")
+        sr = prompt_score("Support/Resistance alignment (1-10)")
+    if momentum is None:
+        momentum = prompt_score("Momentum slope (1-10)")
+    if volume is None:
+        volume = prompt_score("Volume divergence (1-10)")
+
+    investing = InvestingDomain()
+    report = investing.calculate_confluence(
+        tom_lee_stance=tom_lee,
+        cpi_liquidity=cpi,
+        etf_flows=flows,
+        fintwit_velocity=fintwit,
+        cnbc_amplitude=cnbc,
+        skeptic_flow=skeptics,
+        sr_alignment=sr,
+        momentum_slope=momentum,
+        volume_divergence=volume
+    )
+    
+    memory_id = investing.save_confluence_report(report)
+    
+    # Output to Console
+    console.print("\n")
+    console.print(Panel(
+        report["justification"],
+        title="📈 Confluence Framework Analysis Results ⚡️",
+        border_style="green",
+        expand=False
+    ))
+    console.print(f"[bold green]✨ Success![/bold green] Report saved to SQLite under 'investing' (Memory ID: {memory_id}).\n")
+
+
+@invest_app.command("list")
+def invest_list():
+    """📈 List past confluence framework analysis reports."""
+    investing = InvestingDomain()
+    reports = investing.list_confluence_reports()
+    
+    if not reports:
+        console.print("[bold yellow]No investing confluence reports found. 📈[/bold yellow]")
+        return
+        
+    table = Table(title="📈 Past Confluence Framework Reports", show_header=True, header_style="bold green")
+    table.add_column("ID", style="cyan")
+    table.add_column("Date", style="green")
+    table.add_column("Macro", style="cyan")
+    table.add_column("Sentiment", style="magenta")
+    table.add_column("Technical", style="blue")
+    table.add_column("Confluence Score", style="yellow bold")
+    table.add_column("Recommendation", style="white bold")
+    
+    for r in reports:
+        meta = r["metadata"]
+        table.add_row(
+            str(r["id"]),
+            meta.get("date", r["timestamp"]),
+            f"{meta.get('macro_score', 0.0):.2f}/10",
+            f"{meta.get('sentiment_score', 0.0):.2f}/10",
+            f"{meta.get('technical_score', 0.0):.2f}/10",
+            f"{meta.get('final_score', 0.0):.2f}/10",
+            meta.get("recommendation", "N/A")
+        )
+    console.print(table)
+
+
+# --- Memory Subcommands ---
+
+@memory_app.command("compact")
+def memory_compact_cmd(
+    limit: int = typer.Option(50, help="Number of recent memories to analyze.")
+):
+    """🧠 Run Mithrandir 2.0 Memory Compaction loop (extracts rules to playbook)."""
+    compact(limit=limit)
+
+
+@memory_app.command("export")
+def memory_export():
+    """🧠 Export all memories to a timestamped JSON file (ISO-8601 name)."""
+    console.print("[bold magenta]⚡️ Exporting memories...[/bold magenta]")
+    manager = MemoryManager()
+    try:
+        export_file = manager.export_memories()
+        console.print(f"[bold green]✨ Export complete![/bold green] File written to: [cyan]{export_file}[/cyan]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Export failed: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+# --- Prompt Subcommands ---
+
+@prompt_app.command("translate")
+@prompt_app.command("optimize")
+def prompt_optimize(
+    raw_instruction: Optional[str] = typer.Option(None, "--text", "-t", help="Raw prompt or instructions to translate")
+):
+    """💬 Translate raw user input into Machine English for agent-optimal parsing."""
+    if not raw_instruction:
+        raw_instruction = typer.prompt("Enter raw instructions to translate")
+        
+    console.print("[bold magenta]⚡️ Translating instruction to Machine English...[/bold magenta]")
+    from core.prompt_optimizer import translate_to_machine_english
+    
+    try:
+        optimized = translate_to_machine_english(raw_instruction)
+        console.print(Panel(
+            optimized,
+            title="🦾 [bold green]Machine English Translation[/bold green] 🦾",
+            border_style="green",
+            padding=(1, 2)
+        ))
+        
+        # Log this translation memory
+        manager = MemoryManager()
+        manager.add_memory(
+            category="prompt_optimization",
+            content=f"Raw: {raw_instruction}\nOptimized: {optimized}",
+            metadata={"type": "prompt_translation"}
+        )
+    except Exception as e:
+        console.print(f"[bold red]❌ Translation failed: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+# --- Travel Subcommands ---
+
+@travel_app.command("add")
+def travel_add(
+    destination: Optional[str] = typer.Option(None, "--destination", "-d", help="Travel destination"),
+    start_date: Optional[str] = typer.Option(None, "--start", help="Start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = typer.Option(None, "--end", help="End date (YYYY-MM-DD)"),
+    activities: Optional[str] = typer.Option(None, "--activities", "-a", help="Comma-separated activities"),
+    packing_list: Optional[str] = typer.Option(None, "--packing", "-p", help="Comma-separated packing items"),
+):
+    """✈️ Log a new travel itinerary and packing list."""
+    if not destination:
+        destination = typer.prompt("Destination")
+    if not start_date:
+        start_date = typer.prompt("Start Date (YYYY-MM-DD)")
+    if not end_date:
+        end_date = typer.prompt("End Date (YYYY-MM-DD)")
+    if not activities:
+        activities = typer.prompt("Activities (comma-separated)")
+    if not packing_list:
+        packing_list = typer.prompt("Packing list (comma-separated)")
+
+    acts = [x.strip() for x in activities.split(",") if x.strip()]
+    packs = [x.strip() for x in packing_list.split(",") if x.strip()]
+    
+    travel = TravelDomain()
+    memory_id = travel.add_itinerary(destination, start_date, end_date, acts, packs)
+    console.print(f"[bold green]✈️ Success![/bold green] Itinerary logged under travel (Memory ID: {memory_id}).")
+
+
+@travel_app.command("list")
+def travel_list():
+    """✈️ List logged travel itineraries."""
+    travel = TravelDomain()
+    trips = travel.list_itineraries()
+    
+    if not trips:
+        console.print("[bold yellow]No travel itineraries found. ✈️[/bold yellow]")
+        return
+        
+    table = Table(title="✈️ Logged Travel Itineraries", show_header=True, header_style="bold cyan")
+    table.add_column("ID", style="cyan")
+    table.add_column("Destination", style="white bold")
+    table.add_column("Dates", style="green")
+    table.add_column("Activities", style="magenta")
+    table.add_column("Packing List", style="yellow")
+    
+    for t in trips:
+        meta = t["metadata"]
+        table.add_row(
+            str(t["id"]),
+            meta.get("destination", "N/A"),
+            f"{meta.get('start_date', 'N/A')} to {meta.get('end_date', 'N/A')}",
+            ", ".join(meta.get("activities", [])),
+            ", ".join(meta.get("packing_list", []))
+        )
+    console.print(table)
+
+
+# --- Work Subcommands ---
+
+@work_app.command("add")
+def work_add(
+    task: Optional[str] = typer.Option(None, "--task", "-t", help="Task name"),
+    desc: Optional[str] = typer.Option(None, "--desc", "-d", help="Task description"),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help="Task status (Todo, In Progress, Done)"),
+    due: Optional[str] = typer.Option(None, "--due", help="Due date (YYYY-MM-DD)"),
+    priority: Optional[str] = typer.Option(None, "--priority", "-p", help="Priority (High, Medium, Low)"),
+):
+    """💼 Log a new weekly work task or deliverable."""
+    if not task:
+        task = typer.prompt("Task Name")
+    if not desc:
+        desc = typer.prompt("Description")
+    if not status:
+        status = typer.prompt("Status (Todo/In Progress/Done)")
+    if not due:
+        due = typer.prompt("Due Date (YYYY-MM-DD)")
+    if not priority:
+        priority = typer.prompt("Priority (High/Medium/Low)")
+
+    work = WorkDomain()
+    memory_id = work.add_task(task, desc, status, due, priority)
+    console.print(f"[bold green]💼 Success![/bold green] Work task logged (Memory ID: {memory_id}).")
+
+
+@work_app.command("list")
+def work_list():
+    """💼 List logged work tasks."""
+    work = WorkDomain()
+    tasks = work.list_tasks()
+    
+    if not tasks:
+        console.print("[bold yellow]No work tasks found. 💼[/bold yellow]")
+        return
+        
+    table = Table(title="💼 Weekly Work Tasks", show_header=True, header_style="bold blue")
+    table.add_column("ID", style="cyan")
+    table.add_column("Task Name", style="white bold")
+    table.add_column("Priority", style="magenta")
+    table.add_column("Status", style="yellow")
+    table.add_column("Due Date", style="green")
+    table.add_column("Description", style="dim white")
+    
+    for t in tasks:
+        meta = t["metadata"]
+        table.add_row(
+            str(t["id"]),
+            meta.get("task_name", "N/A"),
+            meta.get("priority", "N/A"),
+            meta.get("status", "N/A"),
+            meta.get("due_date", "N/A"),
+            meta.get("description", "")
+        )
+    console.print(table)
+
+
+# --- Projects Subcommands ---
+
+@projects_app.command("add")
+def projects_add(
+    project: Optional[str] = typer.Option(None, "--project", "-p", help="Project name"),
+    task: Optional[str] = typer.Option(None, "--task", "-t", help="Task name"),
+    complexity: Optional[str] = typer.Option(None, "--complexity", "-c", help="Complexity estimation (XS, S, M, L, XL)"),
+    desc: Optional[str] = typer.Option(None, "--desc", "-d", help="Task description"),
+    status: Optional[str] = typer.Option(None, "--status", "-s", help="Task status"),
+):
+    """🚀 Log a new AI project sprint backlog task."""
+    if not project:
+        project = typer.prompt("Project Name")
+    if not task:
+        task = typer.prompt("Task Name")
+    if not complexity:
+        complexity = typer.prompt("Complexity (XS/S/M/L/XL)")
+    if not desc:
+        desc = typer.prompt("Description")
+    if not status:
+        status = typer.prompt("Status")
+
+    projects = ProjectsDomain()
+    memory_id = projects.add_project_task(project, task, complexity, desc, status)
+    console.print(f"[bold green]🚀 Success![/bold green] AI sprint task logged (Memory ID: {memory_id}).")
+
+
+@projects_app.command("list")
+def projects_list():
+    """🚀 List logged AI project sprint tasks."""
+    projects = ProjectsDomain()
+    tasks = projects.list_project_tasks()
+    
+    if not tasks:
+        console.print("[bold yellow]No AI project tasks found. 🚀[/bold yellow]")
+        return
+        
+    table = Table(title="🚀 AI Project Backlog Tasks", show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="cyan")
+    table.add_column("Project", style="cyan bold")
+    table.add_column("Task Name", style="white bold")
+    table.add_column("Complexity", style="yellow")
+    table.add_column("Status", style="magenta")
+    table.add_column("Description", style="dim white")
+    
+    for t in tasks:
+        meta = t["metadata"]
+        table.add_row(
+            str(t["id"]),
+            meta.get("project_name", "N/A"),
+            meta.get("task_name", "N/A"),
+            meta.get("complexity", "N/A"),
+            meta.get("status", "N/A"),
+            meta.get("description", "")
+        )
+    console.print(table)
+
+
+# --- Run Command (Interactive Router) ---
+
+@app.command("run")
+def run(
+    domain: str = typer.Argument(..., help="Domain to run: travel, work, or projects")
+):
+    """🛡️ Run interactive CLI loops for travel, work, or projects."""
+    dom = domain.strip().lower()
+    
+    if dom == "travel":
+        console.print(Panel("✈️ [bold cyan]Travel Domain Interactive Console[/bold cyan] ✈️", border_style="cyan"))
+        choice = typer.prompt("Select action: [1] Add Itinerary, [2] List Itineraries, [3] Exit")
+        if choice == "1":
+            travel_add()
+        elif choice == "2":
+            travel_list()
+        else:
+            console.print("[yellow]Exited Travel loop.[/yellow]")
+            
+    elif dom == "work":
+        console.print(Panel("💼 [bold blue]Work Domain Interactive Console[/bold blue] 💼", border_style="blue"))
+        choice = typer.prompt("Select action: [1] Add Work Task, [2] List Work Tasks, [3] Exit")
+        if choice == "1":
+            work_add()
+        elif choice == "2":
+            work_list()
+        else:
+            console.print("[yellow]Exited Work loop.[/yellow]")
+            
+    elif dom == "projects":
+        console.print(Panel("🚀 [bold magenta]Projects Domain Interactive Console[/bold magenta] 🚀", border_style="magenta"))
+        choice = typer.prompt("Select action: [1] Add Project Task, [2] List Project Tasks, [3] Exit")
+        if choice == "1":
+            projects_add()
+        elif choice == "2":
+            projects_list()
+        else:
+            console.print("[yellow]Exited Projects loop.[/yellow]")
+            
+    else:
+        console.print(f"[bold red]Unknown domain '{domain}'. Please use 'travel', 'work', or 'projects'.[/bold red]")
+        raise typer.Exit(code=1)
+
+
+if __name__ == "__main__":
+    app()
