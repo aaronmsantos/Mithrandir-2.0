@@ -88,3 +88,10 @@ These key questions define the customized cognitive layer of Mithrandir:
 2.  **Investing Tickers & Risk**: Which specific assets/tickers do you run through the Confluence Framework most frequently, and what are your risk rules?
 3.  **Muay Thai**: What is your current training cadence/schedule and goals?
 4.  **Sports (Tottenham & Knicks)**: Would you like Mithrandir to track match schedules and transfer news?
+
+---
+
+## 🔮 Next Upgrades (Mithrandir Roadmap)
+1.  **[🔥 HIGHEST LEVERAGE] Cognitive Drift Sentinel**: Build an active audit agent that compares new CLI actions/trades/sprints against the L2 Playbook rules, raising alerts on guide violations.
+2.  **Live Sentiment & News Ingestors**: Integrate simple feeds to automatically pre-populate Confluence metrics and Tottenham/Knicks updates.
+3.  **GTM Git Connector**: Integrate Fonoa repository hooks to auto-update sprint tasks and perform local code reviews directly from the terminal.
