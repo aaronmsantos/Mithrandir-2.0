@@ -79,3 +79,12 @@ Use the Typer app to run the suit:
 2.  All imports must handle sys.path additions correctly to allow direct module script runs.
 3.  Verify changes by running `PYTHONPATH=. ./.venv/bin/pytest`.
 4.  Diagnostics (`python main.py doctor`) must pass cleanly.
+
+---
+
+## 🧭 Profile & Growth Coordinates (Pending Inputs)
+These key questions define the customized cognitive layer of Mithrandir:
+1.  **GTM Engineering Stack (Fonoa)**: What is your primary tool/API stack at Fonoa?
+2.  **Investing Tickers & Risk**: Which specific assets/tickers do you run through the Confluence Framework most frequently, and what are your risk rules?
+3.  **Muay Thai**: What is your current training cadence/schedule and goals?
+4.  **Sports (Tottenham & Knicks)**: Would you like Mithrandir to track match schedules and transfer news?
