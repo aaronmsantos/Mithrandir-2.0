@@ -369,3 +369,76 @@ def test_profile_domain_and_cli(tmp_path):
     result_show = runner.invoke(app, ["profile", "show"])
     assert result_show.exit_code == 0
     assert "Skilled in Muay Thai" in result_show.stdout
+
+
+def test_linkedin_parsing_and_sync(tmp_path, monkeypatch):
+    """Test LinkedIn copy-pasted content parsing and Agent.MD coordinates syncing."""
+    from domains.profile import ProfileDomain
+    from unittest.mock import mock_open, patch
+    
+    profile = ProfileDomain()
+    
+    # Realistic copy-pasted LinkedIn profile text
+    raw_content = """Aaron Miguel Santos
+GTM Operations Lead at Fonoa
+
+About
+Experienced GTM Operations Lead. Skilled in Claude Code and HubSpot.
+
+Experience
+GTM Operations Lead
+Fonoa
+Jan 2024 - Present
+Lead go-to-market operations, automation, and analytics.
+
+Education
+University of Washington
+Bachelor of Science
+2015 - 2019
+
+Skills
+Claude Code, Clay, Salesforce, HubSpot, Vercel, Base44, Slack, Python, Git
+
+Languages
+English, Spanish
+"""
+    
+    # 1. Test fallback parser directly
+    parsed = profile._parse_linkedin_content_fallback(raw_content)
+    assert parsed["name"] == "Aaron Miguel Santos"
+    assert parsed["headline"] == "GTM Operations Lead at Fonoa"
+    assert any(e["company"] == "Fonoa" for e in parsed["experience"])
+    assert "Python" in parsed["skills"]
+    assert "English" in parsed["languages"]
+    
+    # 2. Test import_profile with is_linkedin=True
+    # Mock sync_agent_coordinates to avoid modifying real Agent.MD
+    with patch.object(ProfileDomain, "sync_agent_coordinates") as mock_sync:
+        mem_id = profile.import_profile(raw_content=raw_content, is_linkedin=True)
+        assert mem_id > 0
+        mock_sync.assert_called_once()
+        
+        # Verify stored memory
+        latest = profile.get_latest_profile()
+        assert latest is not None
+        assert latest["metadata"]["parsed"] is True
+        assert latest["metadata"]["profile_data"]["name"] == "Aaron Miguel Santos"
+        
+    # 3. Test Agent.MD sync logic with mock file read/write
+    mock_agent_content = """# 🔮 Mithrandir 2.0 Agent Guidelines ✨
+## 🧭 Profile & Growth Coordinates ⚡️
+*   **GTM Engineering Stack (Fonoa)**: Claude Code is the primary tool and work surface. Also utilizes Clay, Salesforce, HubSpot, Vercel, Base44, and Slack. Focuses on consistently improving mastery of IDEs and agentic coding platforms to maintain a position of strength at Fonoa.
+"""
+    
+    m_open = mock_open(read_data=mock_agent_content)
+    with patch("builtins.open", m_open), \
+         patch("pathlib.Path.exists", return_value=True):
+         
+        success = profile.sync_agent_coordinates(parsed)
+        assert success is True
+        
+        # Check what was written
+        written_data = "".join(call.args[0] for call in m_open().write.call_args_list)
+        assert "Python" in written_data
+        assert "Git" in written_data
+

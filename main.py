@@ -677,11 +677,80 @@ def projects_list():
         )
     console.print(table)
 
-# --- Profile Subcommands ---
+# --- Profile Helper and Subcommands ---
+
+def _render_structured_profile(data: Dict[str, Any]):
+    """Renders a structured profile JSON beautifully with Rich."""
+    console.print("\n")
+    console.print(Panel(
+        f"[bold cyan]Name:[/bold cyan] {data.get('name', 'N/A')}\n"
+        f"[bold cyan]Headline:[/bold cyan] {data.get('headline', 'N/A')}\n\n"
+        f"[bold cyan]Summary:[/bold cyan]\n{data.get('summary', 'N/A')}",
+        title="🧙‍♂️ [bold magenta]Profile Overview[/bold magenta] ✨",
+        border_style="magenta",
+        expand=False
+    ))
+    
+    # Render Experience Table
+    experience = data.get("experience", [])
+    if experience:
+        table = Table(title="💼 Professional Experience", show_header=True, header_style="bold green")
+        table.add_column("Role", style="white bold")
+        table.add_column("Company", style="cyan")
+        table.add_column("Period", style="green")
+        table.add_column("Description", style="dim white")
+        
+        for exp in experience:
+            table.add_row(
+                exp.get("role", "N/A"),
+                exp.get("company", "N/A"),
+                exp.get("period", "N/A"),
+                exp.get("description", "")
+            )
+        console.print(table)
+        
+    # Render Education Table
+    education = data.get("education", [])
+    if education:
+        table_edu = Table(title="🎓 Education", show_header=True, header_style="bold blue")
+        table_edu.add_column("School", style="white bold")
+        table_edu.add_column("Degree/Field", style="cyan")
+        table_edu.add_column("Period", style="green")
+        
+        for edu in education:
+            degree_field = []
+            if edu.get("degree"):
+                degree_field.append(edu["degree"])
+            if edu.get("field"):
+                degree_field.append(edu["field"])
+            table_edu.add_row(
+                edu.get("school", "N/A"),
+                " - ".join(degree_field) if degree_field else "N/A",
+                edu.get("period", "N/A")
+            )
+        console.print(table_edu)
+        
+    # Render Skills & Languages
+    skills = data.get("skills", [])
+    languages = data.get("languages", [])
+    
+    if skills or languages:
+        skills_text = ", ".join(skills) if skills else "None"
+        langs_text = ", ".join(languages) if languages else "None"
+        
+        console.print(Panel(
+            f"[bold yellow]Skills:[/bold yellow] {skills_text}\n\n"
+            f"[bold magenta]Languages:[/bold magenta] {langs_text}",
+            title="🪄 [bold yellow]Skills & Languages[/bold yellow] 🪄",
+            border_style="yellow",
+            expand=False
+        ))
+
 
 @profile_app.command("import")
 def profile_import(
-    file: str = typer.Argument(..., help="Path to the professional history text/markdown file")
+    file: str = typer.Argument(..., help="Path to the professional history text/markdown file"),
+    linkedin: bool = typer.Option(False, "--linkedin", "-l", help="Process as structured LinkedIn profile")
 ):
     """🧙‍♂️ Import your professional history from a text/markdown file."""
     file_path = Path(file)
@@ -698,12 +767,64 @@ def profile_import(
             content = f.read()
             
         # Run Sentinel audit check before importing
-        if not audit_and_confirm("profile", content, {"source_file": file_path.name}):
+        if not audit_and_confirm("profile", content, {"source_file": file_path.name, "is_linkedin": linkedin}):
             console.print("[bold yellow]❌ Aborted profile import to prevent cognitive drift.[/bold yellow]")
             raise typer.Exit(code=1)
             
-        memory_id = profile.import_profile(file_path)
+        memory_id = profile.import_profile(file_path=file_path, is_linkedin=linkedin)
         console.print(f"[bold green]✨ Success![/bold green] Professional history safely imported (Memory ID: {memory_id}). 🔮")
+        
+        if linkedin:
+            latest = profile.get_latest_profile()
+            if latest and latest.get("metadata", {}).get("parsed"):
+                _render_structured_profile(latest["metadata"]["profile_data"])
+    except Exception as e:
+        console.print(f"[bold red]❌ Import failed: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+@profile_app.command("import-linkedin")
+def profile_import_linkedin(
+    file: Optional[str] = typer.Argument(None, help="Path to the LinkedIn profile text/markdown/HTML file. If omitted, you will be prompted to paste content.")
+):
+    """🧙‍♂️ Import and structure your LinkedIn professional history."""
+    profile = ProfileDomain()
+    
+    content = ""
+    source_name = "direct_input"
+    
+    if file:
+        file_path = Path(file)
+        if not file_path.exists():
+            console.print(f"[bold red]❌ File not found at: {file_path}[/bold red]")
+            raise typer.Exit(code=1)
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        source_name = file_path.name
+    else:
+        console.print("[bold magenta]🔮 Paste your raw copy-pasted LinkedIn profile text below. Press Ctrl-D (Mac/Linux) or Ctrl-Z (Windows) followed by Enter when done: [/bold magenta]")
+        import sys
+        content = sys.stdin.read().strip()
+        
+    if not content:
+        console.print("[bold red]❌ No content provided.[/bold red]")
+        raise typer.Exit(code=1)
+        
+    # Run Sentinel audit check before importing
+    if not audit_and_confirm("profile", content, {"source_file": source_name, "type": "linkedin_profile"}):
+        console.print("[bold yellow]❌ Aborted profile import to prevent cognitive drift.[/bold yellow]")
+        raise typer.Exit(code=1)
+        
+    console.print("[bold cyan]🧙‍♂️ Parsing LinkedIn profile content...[/bold cyan]")
+    
+    try:
+        memory_id = profile.import_profile(raw_content=content, is_linkedin=True)
+        console.print(f"[bold green]✨ Success![/bold green] LinkedIn profile successfully parsed, imported, and synced with Agent.MD (Memory ID: {memory_id}). 🔮")
+        
+        # Display the parsed summary immediately
+        latest = profile.get_latest_profile()
+        if latest and latest.get("metadata", {}).get("parsed"):
+            _render_structured_profile(latest["metadata"]["profile_data"])
     except Exception as e:
         console.print(f"[bold red]❌ Import failed: {e}[/bold red]")
         raise typer.Exit(code=1)
@@ -716,15 +837,20 @@ def profile_show():
     latest = profile.get_latest_profile()
     
     if not latest:
-        console.print("[bold yellow]No professional history imported yet. Use 'profile import [file]' first. 🧙‍♂️[/bold yellow]")
+        console.print("[bold yellow]No professional history imported yet. Use 'profile import-linkedin' or 'profile import [file]' first. 🧙‍♂️[/bold yellow]")
         return
         
-    console.print(Panel(
-        latest["content"],
-        title=f"🧙‍♂️ Professional History (Imported: {latest['timestamp']}) ✨",
-        border_style="magenta",
-        expand=False
-    ))
+    meta = latest.get("metadata", {})
+    if meta.get("parsed") and "profile_data" in meta:
+        _render_structured_profile(meta["profile_data"])
+    else:
+        console.print(Panel(
+            latest["content"],
+            title=f"🧙‍♂️ Professional History (Imported: {latest['timestamp']}) ✨",
+            border_style="magenta",
+            expand=False
+        ))
+
 
 
 # --- Run Command (Interactive Router) ---
