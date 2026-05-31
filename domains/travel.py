@@ -159,9 +159,16 @@ Ensure:
                 break
                 
         if not result["hotel_name"]:
-            hotel_match = re.search(r'\b([A-Za-z0-9 \t\-]+(?:hotel|resort|inn|lodging|suites))\b', content_lower)
-            if hotel_match:
-                result["hotel_name"] = hotel_match.group(1).strip().title()
+            if "airbnb" in content_lower or "air bnb" in content_lower:
+                match = re.search(r'\b([A-Za-z0-9 \t\-]*airbnb[A-Za-z0-9 \t\-]*)\b', content_lower, re.IGNORECASE)
+                if match:
+                    result["hotel_name"] = match.group(1).strip().title()
+                else:
+                    result["hotel_name"] = "Airbnb"
+            else:
+                hotel_match = re.search(r'\b([A-Za-z0-9 \t\-]+(?:hotel|resort|inn|lodging|suites))\b', content_lower)
+                if hotel_match:
+                    result["hotel_name"] = hotel_match.group(1).strip().title()
                 
         # Set confirmation type
         if result["carrier"] and result["hotel_name"]:
@@ -172,11 +179,11 @@ Ensure:
             result["type"] = "hotel"
             
         # 3. Detect Confirmation Code
-        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|reference)\b\s*(?:number|num|no|code)?\s*:?\s*#?\s*\b([a-z0-9]{6})\b', content_lower)
+        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|reference)\b\s*(?:number|num|no|code)?\s*:?\s*#?\s*\b([a-z0-9]{6,10})\b', content_lower)
         if loc_match and loc_match.group(1) != "number":
             result["confirmation_code"] = loc_match.group(1).upper()
         else:
-            hashtag_match = re.search(r'#([a-z0-9]{6})\b', content_lower)
+            hashtag_match = re.search(r'#([a-z0-9]{6,10})\b', content_lower)
             if hashtag_match:
                 result["confirmation_code"] = hashtag_match.group(1).upper()
             else:

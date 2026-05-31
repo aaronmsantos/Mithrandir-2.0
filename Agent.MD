@@ -52,7 +52,7 @@ Maintain and run the Confluence Calculator (`domains/investing.py`) which scores
 *   **Work (Fonoa)**: Work deliverables, targets, and cadences default to Fonoa operations.
 *   **Travel Rules**: Travel planning, itineraries, and recommendations MUST adhere to strict preferences:
     *   **Flights**: Only Delta Airlines or SkyTeam partners (Air France, KLM, Virgin Atlantic, etc.).
-    *   **Lodging**: Only IHG Hotels (InterContinental, Kimpton, Crowne Plaza, Holiday Inn, etc.).
+    *   **Lodging**: Only IHG Hotels (InterContinental, Kimpton, Crowne Plaza, Holiday Inn, etc.). Airbnb is permitted as a fallback lodging choice only when IHG hotels are not feasible.
 
 ---
 

@@ -502,6 +502,19 @@ def test_travel_confirmation_parsing(tmp_path):
     assert parsed_hotel["start_date"] == "2026-08-01"
     assert parsed_hotel["end_date"] == "2026-08-08"
     
+    # 2b. Airbnb lodging confirmation
+    airbnb_text = """
+    Cozy Apartment Airbnb listing in Rome
+    Confirmation Code: HMTR2D9
+    Check-in: 2026-09-01
+    Check-out: 2026-09-05
+    """
+    parsed_airbnb = travel._parse_travel_confirmation_fallback(airbnb_text)
+    assert "Airbnb" in parsed_airbnb["hotel_name"]
+    assert parsed_airbnb["confirmation_code"] == "HMTR2D9"
+    assert parsed_airbnb["start_date"] == "2026-09-01"
+    assert parsed_airbnb["end_date"] == "2026-09-05"
+    
     # 3. Test Bourdain activity enricher fallback
     enriched = travel.bourdain_activity_enricher(["Sightseeing"], "Paris")
     assert "Sightseeing" in enriched

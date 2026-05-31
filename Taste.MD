@@ -42,7 +42,7 @@ This file defines the core aesthetic, workflow, and engineering preferences of t
 
 Mithrandir must filter all search results, recommendations, and plans to strictly adhere to the following rules:
 *   **Flights**: Only Delta Airlines or SkyTeam alliance partners (e.g. Air France, KLM, Virgin Atlantic).
-*   **Lodging**: Only IHG Hotels (e.g. InterContinental, Kimpton, Crowne Plaza, Indigo, Holiday Inn).
+*   **Lodging**: Only IHG Hotels (e.g. InterContinental, Kimpton, Crowne Plaza, Indigo, Holiday Inn). Airbnb is permitted as a fallback lodging choice only when IHG hotels are not feasible.
 *   **Work**: Standard business deliverables default to Fonoa GTM operations.
 *   **Travel Philosophy**: Strictly local, non-touristy immersion. Seek out authentic local hangouts and off-the-beaten-path experiences. Anthony Bourdain is the primary travel inspiration.
 *   **Destinations & Targets**: 
