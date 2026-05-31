@@ -239,3 +239,133 @@ def test_compactor_deterministic_fallback(temp_db):
     inv_playbook_2 = manager.get_playbook_topic("Investing")
     # Rule count should remain the same (deduplicated)
     assert len(inv_playbook_2["rules"]) == len(inv_playbook["rules"])
+
+def test_wal_mode_and_db_settings(temp_db):
+    """Verify WAL mode, synchronous, and busy_timeout settings are applied."""
+    manager = MemoryManager(temp_db)
+    conn = manager.get_connection()
+    try:
+        cursor = conn.cursor()
+        # Check journal mode
+        cursor.execute("PRAGMA journal_mode")
+        journal_mode = cursor.fetchone()[0]
+        assert journal_mode.lower() == "wal"
+        
+        # Check synchronous mode (NORMAL is 1, FULL is 2, OFF is 0)
+        cursor.execute("PRAGMA synchronous")
+        synch = cursor.fetchone()[0]
+        assert synch == 1 or synch == "1" or str(synch).lower() == "normal"
+        
+        # Check busy_timeout
+        cursor.execute("PRAGMA busy_timeout")
+        timeout = cursor.fetchone()[0]
+        assert timeout == 5000
+    finally:
+        conn.close()
+
+def test_cosine_similarity():
+    """Verify pure-Python cosine similarity calculations."""
+    from core.memory.manager import cosine_similarity
+    # Identical vectors -> 1.0
+    v1 = [1.0, 2.0, 3.0]
+    v2 = [1.0, 2.0, 3.0]
+    assert abs(cosine_similarity(v1, v2) - 1.0) < 1e-6
+    
+    # Orthogonal vectors -> 0.0
+    v3 = [1.0, 0.0]
+    v4 = [0.0, 1.0]
+    assert abs(cosine_similarity(v3, v4) - 0.0) < 1e-6
+    
+    # Opposite vectors -> -1.0
+    v5 = [1.0, 1.0]
+    v6 = [-1.0, -1.0]
+    assert abs(cosine_similarity(v5, v6) - (-1.0)) < 1e-6
+    
+    # Empty or dimension-mismatched vectors
+    assert cosine_similarity([], [1.0]) == 0.0
+    assert cosine_similarity([1.0], [1.0, 2.0]) == 0.0
+
+def test_semantic_search_fallback(temp_db, monkeypatch):
+    """Verify that semantic_search_memories falls back to FTS5 when get_embedding returns None."""
+    # Force get_embedding to return None
+    monkeypatch.setattr("core.memory.manager.get_embedding", lambda text: None)
+    
+    manager = MemoryManager(temp_db)
+    manager.add_memory("coding", "Writing Python test suites is highly recommended.")
+    manager.add_memory("investing", "Diversify stock holdings to minimize risk.")
+    
+    # This should fall back to FTS5 search
+    results = manager.semantic_search_memories(query="Writing", limit=5)
+    assert len(results) == 1
+    assert "Writing Python test suites" in results[0]["content"]
+
+def test_semantic_search_success(temp_db, monkeypatch):
+    """Verify semantic search with mock embeddings works correctly and ranks by similarity."""
+    def mock_get_embedding(text: str):
+        vec = [0.0] * 768
+        if "python" in text.lower():
+            vec[0] = 1.0
+        elif "finance" in text.lower():
+            vec[1] = 1.0
+        return vec
+        
+    monkeypatch.setattr("core.memory.manager.get_embedding", mock_get_embedding)
+    
+    manager = MemoryManager(temp_db)
+    id1 = manager.add_memory("coding", "I love coding in python language.")
+    id2 = manager.add_memory("investing", "Finance is all about options trading.")
+    
+    results = manager.semantic_search_memories(query="python query", limit=5)
+    
+    assert len(results) == 2
+    assert results[0]["id"] == id1
+    assert results[0]["similarity"] > 0.9
+    assert results[1]["id"] == id2
+    assert abs(results[1]["similarity"] - 0.0) < 1e-6
+
+def test_fenced_context_with_query_merging(temp_db, monkeypatch):
+    """Verify that get_fenced_context merges and deduplicates FTS5 and vector search results."""
+    def mock_get_embedding(text: str):
+        vec = [0.0] * 768
+        if "container" in text or "queries" in text:
+            vec[0] = 1.0
+        return vec
+        
+    monkeypatch.setattr("core.memory.manager.get_embedding", mock_get_embedding)
+    monkeypatch.setattr("core.memory.fenced_context.MemoryManager", lambda: MemoryManager(temp_db))
+    
+    manager = MemoryManager(temp_db)
+    manager.add_memory("coding", "Always use container queries for responsive grid widgets.")
+    
+    xml_context = get_fenced_context(query="queries")
+    assert "<recalled_context>" in xml_context
+    assert "Always use container queries for responsive grid widgets." in xml_context
+    assert xml_context.count("Always use container queries") == 1
+
+def test_llm_api_retry_backoff(monkeypatch):
+    """Verify that _call_llm_api retries up to 3 times with exponential backoff on failure."""
+    import urllib.error
+    
+    call_count = 0
+    
+    def mock_urlopen(req, timeout=None):
+        nonlocal call_count
+        call_count += 1
+        raise urllib.error.URLError("Connection refused")
+        
+    monkeypatch.setattr("urllib.request.urlopen", mock_urlopen)
+    
+    sleep_calls = []
+    monkeypatch.setattr("time.sleep", lambda seconds: sleep_calls.append(seconds))
+    
+    monkeypatch.setenv("GEMINI_API_KEY", "mock-gemini-key")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    
+    from core.memory.compactor import _call_llm_api
+    
+    result = _call_llm_api("test prompt")
+    
+    assert result is None
+    assert call_count == 4
+    assert sleep_calls == [1, 2, 4]

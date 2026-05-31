@@ -588,8 +588,8 @@ def travel_import(
                 summary = travel.get_ytd_mqd_summary()
                 console.print(Panel(
                     f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
-                    f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Target)\n"
-                    f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]\n"
+                    f"  Total MQDs: [bold green]USD {summary['total_mqds']:,}[/bold green] / USD 28,000 (Diamond Target)\n"
+                    f"  Daily Pacing to Target: [bold yellow]USD {summary['daily_pace_required']:.2f}/day[/bold yellow]\n"
                     f"  Days Remaining: [bold white]{summary['days_remaining']}[/bold white]",
                     title="💎 Diamond Status Tracker 💎",
                     border_style="cyan"
@@ -632,8 +632,8 @@ def travel_import(
                 summary = travel.get_ytd_mqd_summary()
                 console.print(Panel(
                     f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
-                    f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Medallion)\n"
-                    f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]",
+                    f"  Total MQDs: [bold green]USD {summary['total_mqds']:,}[/bold green] / USD 28,000 (Diamond Medallion)\n"
+                    f"  Daily Pacing to Target: [bold yellow]USD {summary['daily_pace_required']:.2f}/day[/bold yellow]",
                     title="⚡ Pacing Update ⚡",
                     border_style="cyan"
                 ))
@@ -651,8 +651,8 @@ def travel_import(
                 summary = travel.get_ytd_mqd_summary()
                 console.print(Panel(
                     f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
-                    f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Medallion)\n"
-                    f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]",
+                    f"  Total MQDs: [bold green]USD {summary['total_mqds']:,}[/bold green] / USD 28,000 (Diamond Medallion)\n"
+                    f"  Daily Pacing to Target: [bold yellow]USD {summary['daily_pace_required']:.2f}/day[/bold yellow]",
                     title="⚡ Pacing Update ⚡",
                     border_style="cyan"
                 ))
@@ -671,8 +671,8 @@ def travel_import(
             summary = travel.get_ytd_mqd_summary()
             console.print(Panel(
                 f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
-                f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Medallion)\n"
-                f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]",
+                f"  Total MQDs: [bold green]USD {summary['total_mqds']:,}[/bold green] / USD 28,000 (Diamond Medallion)\n"
+                f"  Daily Pacing to Target: [bold yellow]USD {summary['daily_pace_required']:.2f}/day[/bold yellow]",
                 title="⚡ Pacing Update ⚡",
                 border_style="cyan"
             ))
@@ -755,7 +755,7 @@ def travel_status(
     # Header Panel
     console.print(Panel(
         f"[bold cyan]✈️ Delta Medallion Status Tracker ({summary['year']}) 💎[/bold cyan]\n"
-        f"Compounded YTD MQDs: [bold green]${total_mqds:,}[/bold green]",
+        f"Compounded YTD MQDs: [bold green]USD {total_mqds:,}[/bold green]",
         border_style="cyan"
     ))
     
@@ -763,10 +763,10 @@ def travel_status(
     breakdown_table = Table(title="📈 MQD Breakdown", show_header=True, header_style="bold magenta", box=None)
     breakdown_table.add_column("Category", style="cyan")
     breakdown_table.add_column("MQDs", style="green bold")
-    breakdown_table.add_row("Flights", f"${breakdown['flights']:,}")
-    breakdown_table.add_row("Card Headstarts", f"${breakdown['headstarts']:,}")
-    breakdown_table.add_row("Card Boosts", f"${breakdown['boosts']:,}")
-    breakdown_table.add_row("Other", f"${breakdown['other']:,}")
+    breakdown_table.add_row("Flights", f"USD {breakdown['flights']:,}")
+    breakdown_table.add_row("Card Headstarts", f"USD {breakdown['headstarts']:,}")
+    breakdown_table.add_row("Card Boosts", f"USD {breakdown['boosts']:,}")
+    breakdown_table.add_row("Other", f"USD {breakdown['other']:,}")
     console.print(breakdown_table)
     
     # Progress bars toward tiers
@@ -784,8 +784,8 @@ def travel_status(
 
     for tier_name, tier_info in summary["tiers"].items():
         bar_str = get_progress_bar(tier_info["percentage"])
-        needed_str = f"[green]Secured! 🎉[/green]" if tier_info["needed"] == 0 else f"[red]${tier_info['needed']:,} needed[/red]"
-        console.print(f"  [bold white]{tier_name:<10}[/bold white] (Target: ${tier_info['threshold']:,}): {bar_str} | {needed_str}")
+        needed_str = f"[green]Secured! 🎉[/green]" if tier_info["needed"] == 0 else f"[red]USD {tier_info['needed']:,} needed[/red]"
+        console.print(f"  [bold white]{tier_name:<10}[/bold white] (Target: USD {tier_info['threshold']:,}): {bar_str} | {needed_str}")
         
     # Pacing Card
     console.print("\n[bold magenta]📅 Diamond Medallion Pacing Rules:[/bold magenta]")
@@ -793,8 +793,8 @@ def travel_status(
         console.print("  🎉 [bold green]Congratulations! You have achieved Diamond Medallion Status! 💎[/bold green]")
     else:
         console.print(f"  Remaining Days in Year: [bold white]{days_left}[/bold white]")
-        console.print(f"  Target Diamond Threshold: [bold white]$28,000 MQDs[/bold white]")
-        console.print(f"  Required Daily Pacing: [bold yellow]${pace:.2f}/day[/bold yellow]")
+        console.print(f"  Target Diamond Threshold: [bold white]USD 28,000 MQDs[/bold white]")
+        console.print(f"  Required Daily Pacing: [bold yellow]USD {pace:.2f}/day[/bold yellow]")
         
     # Flights and Card transactions list
     if summary["flights"]:
@@ -812,7 +812,7 @@ def travel_status(
                 f["route"],
                 f["carrier"],
                 f["flight_number"] or "N/A",
-                f"${f['mqds']:,}",
+                f"USD {f['mqds']:,}",
                 f["status"]
             )
         console.print(flights_table)
@@ -829,7 +829,7 @@ def travel_status(
                 c["date"],
                 c["type"],
                 c["name"],
-                f"${c['mqds']:,}"
+                f"USD {c['mqds']:,}"
             )
         console.print(cards_table)
 
@@ -858,7 +858,7 @@ def travel_optimize(
     if not fare_class:
         fare_class = typer.prompt("Fare Class (letter)")
     if not price:
-        price = typer.prompt("Ticket Price ($)", type=float)
+        price = typer.prompt("Ticket Price (USD)", type=float)
         
     travel = TravelDomain()
     res = travel.calculate_partner_mqd(
@@ -874,10 +874,10 @@ def travel_optimize(
         f"  Carrier: [bold white]{res['carrier']}[/bold white]\n"
         f"  Distance: [bold white]{res['distance']:,} miles[/bold white]\n"
         f"  Fare Class: [bold white]{res['fare_class']}[/bold white]\n"
-        f"  Ticket Price: [bold white]${res['ticket_price']:.2f}[/bold white]\n\n"
+        f"  Ticket Price: [bold white]USD {res['ticket_price']:.2f}[/bold white]\n\n"
         f"  Calculation Method: [yellow]{res['method']}[/yellow]\n"
-        f"  Estimated MQDs Earned: [bold green]${res['mqds_earned']:,}[/bold green]\n"
-        f"  MQD-to-Cost Ratio: [bold cyan]{res['mqd_ratio']:.2f}[/bold cyan] [dim](MQDs earned per $1 spent)[/dim]",
+        f"  Estimated MQDs Earned: [bold green]USD {res['mqds_earned']:,}[/bold green]\n"
+        f"  MQD-to-Cost Ratio: [bold cyan]{res['mqd_ratio']:.2f}[/bold cyan] [dim](MQDs earned per USD 1 spent)[/dim]",
         border_style="cyan"
     ))
     

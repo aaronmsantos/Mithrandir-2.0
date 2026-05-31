@@ -670,7 +670,7 @@ def test_delta_mqd_status_and_calculator(setup_test_db, tmp_path):
     # Add a card headstart memory
     travel.manager.add_memory(
         category="travel",
-        content=f"Card Headstart: Reserve\nDate: {year}-01-15\nMQDs: $2,500",
+        content=f"Card Headstart: Reserve\nDate: {year}-01-15\nMQDs: USD 2,500",
         metadata={
             "type": "card_headstart",
             "card_name": "Amex Reserve",
@@ -683,7 +683,7 @@ def test_delta_mqd_status_and_calculator(setup_test_db, tmp_path):
     # Add a flight memory
     travel.manager.add_memory(
         category="travel",
-        content=f"Parsed Flight Travel Confirmation for JFK to AMS.\nDates: {year}-03-10 to {year}-03-15\nCarrier: Delta Airlines, Flight #: DL100\nMetrics: 3,500 Miles, $1,200 MQDs",
+        content=f"Parsed Flight Travel Confirmation for JFK to AMS.\nDates: {year}-03-10 to {year}-03-15\nCarrier: Delta Airlines, Flight #: DL100\nMetrics: 3,500 Miles, USD 1,200 MQDs",
         metadata={
             "type": "travel_confirmation",
             "destination": "AMS",
@@ -712,7 +712,7 @@ def test_delta_mqd_status_and_calculator(setup_test_db, tmp_path):
     result_status = runner.invoke(app, ["travel", "status", "--year", str(year)])
     assert result_status.exit_code == 0
     assert "Delta Medallion Status Tracker" in result_status.stdout
-    assert "$3,700" in result_status.stdout
+    assert "USD 3,700" in result_status.stdout
     
     # 4. Test CLI travel optimize
     result_opt = runner.invoke(app, [
@@ -724,7 +724,7 @@ def test_delta_mqd_status_and_calculator(setup_test_db, tmp_path):
     ])
     assert result_opt.exit_code == 0
     assert "Flight MQD Optimization Report" in result_opt.stdout
-    assert "Estimated MQDs Earned: $1,800" in result_opt.stdout
+    assert "Estimated MQDs Earned: USD 1,800" in result_opt.stdout
     assert "HIGHLY OPTIMIZED ROUTE" in result_opt.stdout
     
     # 5. Test CLI travel run loop for status and optimize

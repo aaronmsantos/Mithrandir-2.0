@@ -1,8 +1,10 @@
 import json
 import logging
+import math
 import os
 import sqlite3
 import sys
+import urllib.request
 from pathlib import Path
 
 # Add project root directory to sys.path to allow execution of scripts directly
@@ -82,6 +84,61 @@ def decrypt_journal(encrypted_text: str) -> str:
         logger.error(f"Failed to decrypt journal text: {e}")
         return "[DECRYPTION_ERROR]"
 
+# --- Vector Embedding & Similarity Helpers ---
+def get_embedding(text: str) -> Optional[List[float]]:
+    """
+    Fetch a 768-dimension vector from the Gemini embeddings API
+    (model text-embedding-004) using urllib. Handles offline/missing key scenarios.
+    """
+    if not text or not text.strip():
+        return None
+
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    def is_valid(key: Optional[str]) -> bool:
+        return bool(key and "placeholder" not in key.lower() and "your_" not in key.lower())
+
+    if not is_valid(gemini_key):
+        logger.warning("GEMINI_API_KEY is not set or invalid; skipping embedding generation.")
+        return None
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={gemini_key}"
+    data = {
+        "model": "models/text-embedding-004",
+        "content": {
+            "parts": [{"text": text}]
+        }
+    }
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(data).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            embedding = res_data.get("embedding", {}).get("values")
+            if embedding and len(embedding) == 768:
+                return embedding
+            else:
+                logger.warning(f"Embedding returned unexpected structure or dimension: {res_data}")
+                return None
+    except Exception as e:
+        logger.warning(f"Failed to fetch vector embedding: {e}")
+        return None
+
+def cosine_similarity(v1: List[float], v2: List[float]) -> float:
+    """Calculate the cosine similarity between two vectors using pure Python and math."""
+    if not v1 or not v2 or len(v1) != len(v2):
+        return 0.0
+    dot_product = sum(x * y for x, y in zip(v1, v2))
+    norm_v1 = math.sqrt(sum(x * x for x in v1))
+    norm_v2 = math.sqrt(sum(y * y for y in v2))
+    if norm_v1 == 0.0 or norm_v2 == 0.0:
+        return 0.0
+    return dot_product / (norm_v1 * norm_v2)
+
 # --- Database Initialization ---
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     """Initialize the SQLite memory database and create the tables if they don't exist."""
@@ -89,6 +146,9 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.execute("PRAGMA foreign_keys = ON;")
     cursor = conn.cursor()
     
@@ -159,6 +219,15 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
             FOREIGN KEY (statement_id) REFERENCES portfolio_statements (statement_id) ON DELETE CASCADE
         )
     """)
+
+    # 6. Create memory_embeddings table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS memory_embeddings (
+            memory_id INTEGER PRIMARY KEY,
+            embedding TEXT NOT NULL,
+            FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
+        )
+    """)
     
     conn.commit()
     logger.info(f"Mithrandir 2.0 database tables initialized successfully at {db_path}.")
@@ -176,6 +245,9 @@ class MemoryManager:
         """Establish and return an sqlite3 connection with Row factory."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
         conn.execute("PRAGMA foreign_keys = ON;")
         return conn
 
@@ -207,6 +279,14 @@ class MemoryManager:
                 cursor.execute(
                     "INSERT INTO memories_fts (rowid, content, category) VALUES (?, ?, ?)",
                     (memory_id, content, category)
+                )
+            
+            # Fetch and store vector embedding
+            embedding = get_embedding(content)
+            if embedding:
+                cursor.execute(
+                    "INSERT INTO memory_embeddings (memory_id, embedding) VALUES (?, ?)",
+                    (memory_id, json.dumps(embedding))
                 )
             
             conn.commit()
@@ -299,6 +379,19 @@ class MemoryManager:
                     (content, category, memory_id)
                 )
 
+            # Fetch and store vector embedding
+            embedding = get_embedding(content)
+            if embedding:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO memory_embeddings (memory_id, embedding) VALUES (?, ?)",
+                    (memory_id, json.dumps(embedding))
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM memory_embeddings WHERE memory_id = ?",
+                    (memory_id,)
+                )
+            
             conn.commit()
             logger.info(f"Updated memory ID {memory_id} successfully.")
             return True
@@ -429,6 +522,65 @@ class MemoryManager:
         finally:
             conn.close()
 
+    def semantic_search_memories(self, query: str, category: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search memories by vector similarity using Gemini text-embedding-004.
+        Falls back to FTS5 keyword search if offline or missing key.
+        """
+        query_emb = get_embedding(query)
+        if not query_emb:
+            logger.warning("Gemini embeddings API failed or key missing. Falling back to traditional FTS5/keyword search.")
+            return self.search_memories(query=query, category=category)[:limit]
+
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            sql = """
+                SELECT m.id, m.timestamp, m.category, m.content, m.metadata, e.embedding
+                FROM memories m
+                JOIN memory_embeddings e ON m.id = e.memory_id
+            """
+            params = []
+            if category:
+                sql += " WHERE m.category = ?"
+                params.append(category)
+            
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            
+            scored_memories = []
+            for row in rows:
+                try:
+                    emb_list = json.loads(row["embedding"])
+                except Exception:
+                    continue
+                
+                sim = cosine_similarity(query_emb, emb_list)
+                
+                cat = row["category"]
+                raw_content = row["content"]
+                if cat.lower() == "journal":
+                    content = decrypt_journal(raw_content)
+                else:
+                    content = raw_content
+                    
+                scored_memories.append({
+                    "id": row["id"],
+                    "timestamp": row["timestamp"],
+                    "category": cat,
+                    "content": content,
+                    "metadata": json.loads(row["metadata"] or "{}"),
+                    "similarity": sim
+                })
+                
+            scored_memories.sort(key=lambda x: x["similarity"], reverse=True)
+            return scored_memories[:limit]
+        except Exception as e:
+            logger.error(f"Error executing semantic memory search: {e}")
+            raise
+        finally:
+            conn.close()
+
     # --- Playbook Operations ---
     def upsert_playbook_topic(self, topic: str, summary: str, rules: List[str]) -> int:
         """Upsert a topic in the playbook table (replaces on duplicate topic)."""
@@ -545,6 +697,7 @@ class MemoryManager:
             cursor.execute("DELETE FROM playbook")
             cursor.execute("DELETE FROM portfolio_positions")
             cursor.execute("DELETE FROM portfolio_statements")
+            cursor.execute("DELETE FROM memory_embeddings")
             conn.commit()
             logger.info("Purged all table records from the database.")
         except Exception as e:

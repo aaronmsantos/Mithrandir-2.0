@@ -98,8 +98,18 @@ These coordinates define the customized cognitive layer of Mithrandir:
 *   **Sports Teams**: Tottenham Hotspur (Football) and NY Knicks (Basketball). Keep in mind these are the operator's primary teams.
 
 ---
-
 ## 🔮 Next Upgrades (Mithrandir Roadmap)
-1.  **[🔥 HIGHEST LEVERAGE] Cognitive Drift Sentinel**: Build an active audit agent that compares new CLI actions/trades/sprints against the L2 Playbook rules, raising alerts on guide violations.
-2.  **Live Sentiment & News Ingestors**: Integrate simple feeds to automatically pre-populate Confluence metrics and Tottenham/Knicks updates.
-3.  **GTM Git Connector**: Integrate Fonoa repository hooks to auto-update sprint tasks and perform local code reviews directly from the terminal.
+
+### Phase 1: Self-Learning (Playbook Evolution)
+*   **Dynamic Schema Induction**: Implement a database observer to suggest schema updates on new travel or portfolio data patterns dynamically.
+*   **Vector Feedback Alignment**: Save Sentinel override events as feedback, automatically refining playbook rules to align with operator decisions.
+
+### Phase 2: Self-Healing (Resilience & Recovery)
+*   **Automated Lint & Test Healing**: Subprocess runner that monitors unit test failures or deprecations, runs a refactoring agent, verifies the fix, and commits the code automatically.
+*   **Cryptographic Key Recovery**: Split Fernet journal keys into secure recovery shards using Shamir's Secret Sharing.
+
+### Phase 3: Self-Optimization (Performance & Context)
+*   **Asynchronous CLI Execution**: Offload LLM API requests and background compaction tasks to worker threads for zero-latency CLI performance.
+*   **Dynamic Context Pruning**: Implement context compression in fenced_context.py, leveraging cosine similarity thresholds to keep prompt tokens low.
+*   **Database Transaction Queues**: Jittered backoff retry decorators for write transactions to handle rapid parallel updates.
+

@@ -26,7 +26,6 @@ __pycache__/
 htmlcov/
 
 # Local Exports & Temp Files
-data/exports/
-data/exports/*.json
-data/logs/
+data/
 .runtime/
+

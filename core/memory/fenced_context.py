@@ -52,7 +52,28 @@ def get_fenced_context(query: Optional[str] = None, category: Optional[str] = No
     manager = MemoryManager()
     
     # 1. Retrieve and filter memories
-    memories = manager.search_memories(query=query, category=category)
+    if query:
+        # Fetch semantic search results
+        vector_results = manager.semantic_search_memories(query=query, category=category, limit=5)
+        # Fetch keyword search results
+        fts_results = manager.search_memories(query=query, category=category)
+        
+        # Merge and deduplicate by memory ID
+        seen_ids = set()
+        memories = []
+        for m in vector_results:
+            if m["id"] not in seen_ids:
+                seen_ids.add(m["id"])
+                memories.append(m)
+        for m in fts_results:
+            if m["id"] not in seen_ids:
+                seen_ids.add(m["id"])
+                memories.append(m)
+        
+        # Sort merged memories chronologically (most recent first)
+        memories.sort(key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
+    else:
+        memories = manager.search_memories(query=None, category=category)
     
     # 2. Retrieve and filter playbook topics
     all_playbooks = manager.list_playbook_topics()

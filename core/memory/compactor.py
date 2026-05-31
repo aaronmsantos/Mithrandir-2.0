@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sys
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -32,7 +33,7 @@ app = typer.Typer(help="🔮 Mithrandir 2.0 Memory Compactor CLI 🪄")
 
 # --- LLM API Call Helper ---
 def _call_llm_api(prompt: str) -> Optional[str]:
-    """Call Gemini, OpenAI, or Anthropic REST APIs using urllib to avoid heavy SDK dependencies."""
+    """Call Gemini, OpenAI, or Anthropic REST APIs using urllib to avoid heavy SDK dependencies with retries and exponential backoff."""
     gemini_key = os.environ.get("GEMINI_API_KEY")
     openai_key = os.environ.get("OPENAI_API_KEY")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -54,12 +55,18 @@ def _call_llm_api(prompt: str) -> Optional[str]:
             headers={"Content-Type": "application/json"},
             method="POST"
         )
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                res_data = json.loads(response.read().decode("utf-8"))
-                return res_data["candidates"][0]["content"]["parts"][0]["text"]
-        except Exception as e:
-            logger.warning(f"Gemini API invocation failed: {e}")
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    res_data = json.loads(response.read().decode("utf-8"))
+                    return res_data["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception as e:
+                if attempt < 3:
+                    backoff = 2 ** attempt
+                    logger.warning(f"Gemini API attempt {attempt + 1} failed: {e}. Retrying in {backoff} seconds...")
+                    time.sleep(backoff)
+                else:
+                    logger.error(f"Gemini API invocation failed after 3 retries: {e}")
             
     # 2. Try OpenAI
     if is_valid(openai_key):
@@ -82,12 +89,18 @@ def _call_llm_api(prompt: str) -> Optional[str]:
             },
             method="POST"
         )
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                res_data = json.loads(response.read().decode("utf-8"))
-                return res_data["choices"][0]["message"]["content"]
-        except Exception as e:
-            logger.warning(f"OpenAI API invocation failed: {e}")
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    res_data = json.loads(response.read().decode("utf-8"))
+                    return res_data["choices"][0]["message"]["content"]
+            except Exception as e:
+                if attempt < 3:
+                    backoff = 2 ** attempt
+                    logger.warning(f"OpenAI API attempt {attempt + 1} failed: {e}. Retrying in {backoff} seconds...")
+                    time.sleep(backoff)
+                else:
+                    logger.error(f"OpenAI API invocation failed after 3 retries: {e}")
 
     # 3. Try Anthropic
     if is_valid(anthropic_key):
@@ -110,12 +123,18 @@ def _call_llm_api(prompt: str) -> Optional[str]:
             },
             method="POST"
         )
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                res_data = json.loads(response.read().decode("utf-8"))
-                return res_data["content"][0]["text"]
-        except Exception as e:
-            logger.warning(f"Anthropic API invocation failed: {e}")
+        for attempt in range(4):
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    res_data = json.loads(response.read().decode("utf-8"))
+                    return res_data["content"][0]["text"]
+            except Exception as e:
+                if attempt < 3:
+                    backoff = 2 ** attempt
+                    logger.warning(f"Anthropic API attempt {attempt + 1} failed: {e}. Retrying in {backoff} seconds...")
+                    time.sleep(backoff)
+                else:
+                    logger.error(f"Anthropic API invocation failed after 3 retries: {e}")
 
     logger.warning("No valid API Key detected or calls failed. Running in deterministic fallback mode.")
     return None

@@ -743,7 +743,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
                     carrier = act["carrier"]
                     flight_num = act["flight_number"]
                     miles_str = f"{act['miles']:,} Miles" if act.get("miles") else "N/A Miles"
-                    mqds_str = f"${act['mqds']:,} MQDs" if act.get("mqds") else "N/A MQDs"
+                    mqds_str = f"USD {act['mqds']:,} MQDs" if act.get("mqds") else "N/A MQDs"
                     ticket_str = f"Ticket: {act['ticket_number']}" if act.get("ticket_number") else "No Ticket #"
                     status = act["status"]
                     
@@ -797,7 +797,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
                         
                 if not exists:
                     type_title = "Card Headstart" if act_type == "card_headstart" else "Card Boost"
-                    content = f"{type_title}: {card_name}\nDate: {date}\nMQDs: ${mqds:,}"
+                    content = f"{type_title}: {card_name}\nDate: {date}\nMQDs: USD {mqds:,}"
                     new_meta = {
                         "source_file": pdf_path.name,
                         "type": act_type,
