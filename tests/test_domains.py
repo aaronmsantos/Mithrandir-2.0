@@ -338,3 +338,34 @@ def test_cli_memory_export_command(tmp_path, monkeypatch):
     assert len(written_files) == 1
     # Filename contains timestamp
     assert "memories_" in written_files[0].name
+
+
+def test_profile_domain_and_cli(tmp_path):
+    """Test importing and showing professional history via ProfileDomain and CLI commands."""
+    from domains.profile import ProfileDomain
+    profile = ProfileDomain()
+    
+    # Test file setup
+    profile_file = tmp_path / "profile_history.md"
+    profile_file.write_text("Fonoa GTM Operations lead since 2024. Skilled in Claude Code.")
+    
+    # 1. Direct Python test
+    mem_id = profile.import_profile(profile_file)
+    assert mem_id > 0
+    
+    latest = profile.get_latest_profile()
+    assert latest is not None
+    assert latest["content"] == "Fonoa GTM Operations lead since 2024. Skilled in Claude Code."
+    
+    # 2. CLI Import test
+    cli_file = tmp_path / "cli_history.md"
+    cli_file.write_text("Skilled in Muay Thai and investing ASTS options.")
+    
+    result_import = runner.invoke(app, ["profile", "import", str(cli_file)])
+    assert result_import.exit_code == 0
+    assert "safely imported" in result_import.stdout
+    
+    # 3. CLI Show test
+    result_show = runner.invoke(app, ["profile", "show"])
+    assert result_show.exit_code == 0
+    assert "Skilled in Muay Thai" in result_show.stdout

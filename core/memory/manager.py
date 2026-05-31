@@ -384,7 +384,7 @@ class MemoryManager:
                     })
             
             # Sort chronologically descending (most recent first)
-            results.sort(key=lambda x: x["timestamp"], reverse=True)
+            results.sort(key=lambda x: (x["timestamp"], x["id"]), reverse=True)
             return results
         except Exception as e:
             logger.error(f"Error executing memory search: {e}")

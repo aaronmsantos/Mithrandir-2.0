@@ -25,6 +25,7 @@ from domains.investing import InvestingDomain
 from domains.travel import TravelDomain
 from domains.work import WorkDomain
 from domains.projects import ProjectsDomain
+from domains.profile import ProfileDomain
 
 # Initialize Typer and Rich Console
 app = typer.Typer(help="🔮 Mithrandir 2.0 Command Line Interface ✨", rich_markup_mode="rich")
@@ -71,6 +72,7 @@ prompt_app = typer.Typer(name="prompt", help="💬 Prompt translation and Machin
 travel_app = typer.Typer(name="travel", help="✈️ Track travel itineraries and packing lists.")
 work_app = typer.Typer(name="work", help="💼 Track weekly work tasks and deliverables.")
 projects_app = typer.Typer(name="projects", help="🚀 Manage AI sprint backlogs and project tasks.")
+profile_app = typer.Typer(name="profile", help="🧙‍♂️ Manage your professional history and profile coordinates.")
 
 app.add_typer(journal_app)
 app.add_typer(invest_app)
@@ -79,6 +81,7 @@ app.add_typer(prompt_app)
 app.add_typer(travel_app)
 app.add_typer(work_app)
 app.add_typer(projects_app)
+app.add_typer(profile_app)
 
 
 # --- Root Commands ---
@@ -673,6 +676,55 @@ def projects_list():
             meta.get("description", "")
         )
     console.print(table)
+
+# --- Profile Subcommands ---
+
+@profile_app.command("import")
+def profile_import(
+    file: str = typer.Argument(..., help="Path to the professional history text/markdown file")
+):
+    """🧙‍♂️ Import your professional history from a text/markdown file."""
+    file_path = Path(file)
+    console.print(f"[bold magenta]⚡️ Importing professional profile from [cyan]{file_path}[/cyan]...[/bold magenta]")
+    
+    profile = ProfileDomain()
+    
+    try:
+        if not file_path.exists():
+            console.print(f"[bold red]❌ File not found at: {file_path}[/bold red]")
+            raise typer.Exit(code=1)
+            
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        # Run Sentinel audit check before importing
+        if not audit_and_confirm("profile", content, {"source_file": file_path.name}):
+            console.print("[bold yellow]❌ Aborted profile import to prevent cognitive drift.[/bold yellow]")
+            raise typer.Exit(code=1)
+            
+        memory_id = profile.import_profile(file_path)
+        console.print(f"[bold green]✨ Success![/bold green] Professional history safely imported (Memory ID: {memory_id}). 🔮")
+    except Exception as e:
+        console.print(f"[bold red]❌ Import failed: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+@profile_app.command("show")
+def profile_show():
+    """🧙‍♂️ Display your current imported professional history."""
+    profile = ProfileDomain()
+    latest = profile.get_latest_profile()
+    
+    if not latest:
+        console.print("[bold yellow]No professional history imported yet. Use 'profile import [file]' first. 🧙‍♂️[/bold yellow]")
+        return
+        
+    console.print(Panel(
+        latest["content"],
+        title=f"🧙‍♂️ Professional History (Imported: {latest['timestamp']}) ✨",
+        border_style="magenta",
+        expand=False
+    ))
 
 
 # --- Run Command (Interactive Router) ---
