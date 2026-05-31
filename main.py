@@ -591,7 +591,9 @@ def travel_import(
                 
         else: # is directory
             console.print(f"[bold magenta]⚡️ Scanning directory [cyan]{path}[/cyan] for travel confirmations...[/bold magenta]")
-            ids = travel.import_confirmation_files(path)
+            def audit_cb(content_str: str, meta: Dict[str, Any]) -> bool:
+                return audit_and_confirm("travel", content_str, meta)
+            ids = travel.import_confirmation_files(path, audit_callback=audit_cb)
             if ids:
                 console.print(f"[bold green]✨ Success![/bold green] Successfully imported {len(ids)} travel confirmations.")
             else:
@@ -601,7 +603,9 @@ def travel_import(
         workspace_dir = Path(__file__).resolve().parent
         incoming_dir = workspace_dir / "data" / "incoming_travel"
         console.print(f"[bold magenta]⚡️ Scanning default incoming directory [cyan]{incoming_dir}[/cyan]...[/bold magenta]")
-        ids = travel.import_confirmation_files(incoming_dir)
+        def audit_cb(content_str: str, meta: Dict[str, Any]) -> bool:
+            return audit_and_confirm("travel", content_str, meta)
+        ids = travel.import_confirmation_files(incoming_dir, audit_callback=audit_cb)
         if ids:
             console.print(f"[bold green]✨ Success![/bold green] Successfully imported {len(ids)} travel confirmations.")
         else:

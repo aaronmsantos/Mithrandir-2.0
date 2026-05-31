@@ -549,3 +549,75 @@ def test_travel_confirmation_parsing(tmp_path):
     assert not hotel_file.exists()
 
 
+def test_travel_ingestion_optimizations(tmp_path):
+    """Test travel ingestion optimizations including HTML parsing, SkyTeam carriers, international dates, and audit callbacks."""
+    from domains.travel import TravelDomain, HTMLTextExtractor
+    
+    # 1. Test HTMLTextExtractor visibility stripping
+    html_content = """
+    <html>
+    <head>
+        <style>body { color: blue; }</style>
+        <script>alert("test");</script>
+    </head>
+    <body>
+        <h1>Air France Flight Confirmation</h1>
+        <p>Confirmation Code: <b>AF6789</b></p>
+        <p>Depart: 15 June 2026</p>
+        <p>Route: CDG to ATH</p>
+    </body>
+    </html>
+    """
+    extractor = HTMLTextExtractor()
+    extractor.feed(html_content)
+    plain_text = extractor.get_text()
+    
+    assert "style" not in plain_text.lower()
+    assert "alert" not in plain_text.lower()
+    assert "Air France Flight Confirmation" in plain_text
+    assert "Confirmation Code: AF6789" in plain_text
+    
+    # 2. Test auto-extraction of HTML inside parse_travel_confirmation
+    travel = TravelDomain()
+    parsed = travel.parse_travel_confirmation(html_content)
+    assert parsed["carrier"] == "Air France"
+    assert parsed["flight_number"] == "AF6789"
+    assert parsed["confirmation_code"] == "AF6789"
+    assert parsed["start_date"] == "2026-06-15"
+    assert parsed["destination"] == "CDG to ATH"
+    
+    # 3. Test international date parsing (DD-Month-YYYY)
+    snippet_date2 = """
+    KLM flight to Amsterdam
+    Conf: KLM543
+    15-Jun-2026
+    """
+    parsed2 = travel.parse_travel_confirmation(snippet_date2)
+    assert parsed2["carrier"] == "KLM"
+    assert parsed2["flight_number"] == "KLM543"
+    assert parsed2["start_date"] == "2026-06-15"
+    
+    # 4. Test directory scanner with audit callback
+    incoming_dir = tmp_path / "incoming_travel_opt"
+    incoming_dir.mkdir()
+    
+    file_pass = incoming_dir / "pass.txt"
+    file_pass.write_text("Delta Airlines flight DL 100, JFK to AMS, June 7, 2026, Confirmation: GDR5CV")
+    
+    file_block = incoming_dir / "block.txt"
+    file_block.write_text("United Airlines flight UA 999, JFK to FRA, June 7, 2026, Confirmation: UAX999")
+    
+    # Define an audit callback that blocks United Airlines
+    def audit_cb(content, metadata):
+        # Allow Delta, block United
+        return "Delta" in content
+        
+    ids = travel.import_confirmation_files(incoming_dir, audit_callback=audit_cb)
+    
+    # Only the passing file (Delta) should be processed and archived
+    assert len(ids) == 1
+    
+    processed_dir = incoming_dir / "processed"
+    assert (processed_dir / "pass.txt").exists()
+    assert not (processed_dir / "block.txt").exists()
+    assert file_block.exists()  # Kept in incoming directory

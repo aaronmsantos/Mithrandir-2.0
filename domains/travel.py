@@ -4,9 +4,39 @@ import re
 import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from html.parser import HTMLParser
 from core.memory.manager import MemoryManager
 
 logger = logging.getLogger("mithrandir")
+
+class HTMLTextExtractor(HTMLParser):
+    """Parses HTML documents and extracts visible text content, ignoring scripts/styles."""
+    def __init__(self):
+        super().__init__()
+        self.result = []
+        self.ignore_stack = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ["script", "style", "head", "meta", "link"]:
+            self.ignore_stack.append(tag)
+        elif tag in ["p", "div", "br", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6"]:
+            self.result.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ["script", "style", "head", "meta", "link"]:
+            if tag in self.ignore_stack:
+                self.ignore_stack.remove(tag)
+        elif tag in ["p", "div", "tr", "li", "h1", "h2", "h3", "h4", "h5", "h6"]:
+            self.result.append("\n")
+
+    def handle_data(self, data):
+        if not self.ignore_stack:
+            self.result.append(data)
+
+    def get_text(self) -> str:
+        raw_text = "".join(self.result)
+        lines = [line.strip() for line in raw_text.splitlines()]
+        return "\n".join([line for line in lines if line])
 
 class TravelDomain:
     """Domain module for tracking travel itineraries, parsing confirmations, and managing lists."""
@@ -51,6 +81,11 @@ class TravelDomain:
 
     def parse_travel_confirmation(self, content: str) -> Dict[str, Any]:
         """Parses raw travel confirmations using LLM if available, else regex fallback."""
+        if re.search(r'<!doctype\s+html|<html\b|<body\b', content, re.IGNORECASE):
+            extractor = HTMLTextExtractor()
+            extractor.feed(content)
+            content = extractor.get_text()
+            
         parsed_data = None
         try:
             parsed_data = self._parse_travel_confirmation_llm(content)
@@ -127,26 +162,79 @@ Ensure:
         content_lower = content.lower()
         
         # 1. Detect Carrier & Flight Number
-        if "delta" in content_lower:
-            result["carrier"] = "Delta Airlines"
-        elif "air france" in content_lower:
-            result["carrier"] = "Air France"
-        elif "klm" in content_lower:
-            result["carrier"] = "KLM"
-        elif "virgin atlantic" in content_lower:
-            result["carrier"] = "Virgin Atlantic"
-        elif "united" in content_lower:
-            result["carrier"] = "United Airlines"
-        elif "american" in content_lower:
-            result["carrier"] = "American Airlines"
-            
-        flight_match = re.search(r'\b(?:dl|dal|delta|ua|aa|af|klm)(?:\s+flight)?\s*#?\s*(\d{2,4})\b', content_lower)
+        carrier_map = {
+            "delta": "Delta Airlines",
+            "air france": "Air France",
+            "klm": "KLM",
+            "virgin atlantic": "Virgin Atlantic",
+            "aeromexico": "Aeromexico",
+            "korean air": "Korean Air",
+            "sas": "SAS",
+            "scandinavian airlines": "SAS",
+            "china eastern": "China Eastern",
+            "china airlines": "China Airlines",
+            "vietnam airlines": "Vietnam Airlines",
+            "saudia": "Saudia",
+            "ita airways": "ITA Airways",
+            "united": "United Airlines",
+            "american": "American Airlines"
+        }
+        
+        for k, v in carrier_map.items():
+            if k in content_lower:
+                result["carrier"] = v
+                break
+
+        # Capture both the prefix and the flight number digits
+        flight_match = re.search(
+            r'\b(dl|dal|delta|ua|aa|af|klm|vs|am|ke|sk|mu|ci|vn|sv|az)(?:\s+flight)?\s*#?\s*(\d{2,4})\b',
+            content_lower
+        )
         if flight_match:
-            # Default to DL flight if Delta is mentioned
-            result["flight_number"] = f"DL{flight_match.group(1)}" if "delta" in content_lower or "dl" in content_lower else flight_match.group(1).upper()
-            if not result["carrier"]:
-                result["carrier"] = "Delta Airlines" if "dl" in content_lower else "Unknown Carrier"
+            prefix = flight_match.group(1).upper()
+            digits = flight_match.group(2)
+            
+            # Map common prefix abbreviations/names to standard codes
+            if prefix in ["DELTA", "DAL", "DL"]:
+                std_prefix = "DL"
+            else:
+                std_prefix = prefix
                 
+            result["flight_number"] = f"{std_prefix}{digits}"
+            
+            # Auto-assign carrier if not already detected
+            if not result["carrier"]:
+                if std_prefix == "DL":
+                    result["carrier"] = "Delta Airlines"
+                elif std_prefix == "AF":
+                    result["carrier"] = "Air France"
+                elif std_prefix == "KLM":
+                    result["carrier"] = "KLM"
+                elif std_prefix == "VS":
+                    result["carrier"] = "Virgin Atlantic"
+                elif std_prefix == "AM":
+                    result["carrier"] = "Aeromexico"
+                elif std_prefix == "KE":
+                    result["carrier"] = "Korean Air"
+                elif std_prefix == "SK":
+                    result["carrier"] = "SAS"
+                elif std_prefix == "MU":
+                    result["carrier"] = "China Eastern"
+                elif std_prefix == "CI":
+                    result["carrier"] = "China Airlines"
+                elif std_prefix == "VN":
+                    result["carrier"] = "Vietnam Airlines"
+                elif std_prefix == "SV":
+                    result["carrier"] = "Saudia"
+                elif std_prefix == "AZ":
+                    result["carrier"] = "ITA Airways"
+                elif std_prefix == "UA":
+                    result["carrier"] = "United Airlines"
+                elif std_prefix == "AA":
+                    result["carrier"] = "American Airlines"
+                else:
+                    result["carrier"] = "Unknown Carrier"
+                    
         # 2. Detect Hotel name (specifically checking common IHG brands)
         ihg_hotels = ["intercontinental", "kimpton", "crowne plaza", "holiday inn", "staybridge", "indigo"]
         for h in ihg_hotels:
@@ -183,7 +271,7 @@ Ensure:
             result["type"] = "hotel"
             
         # 3. Detect Confirmation Code
-        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|reference)\b[ \t]*(?:number|num|no|code)?[ \t]*:?[ \t]*#?[ \t]*\b([a-z0-9]{6,10})\b', content_lower)
+        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|booking\s*id|reservation\s*id|reference|conf\.?)\b[ \t]*(?:number|num|no\.?|code)?[ \t]*:?[ \t]*#?[ \t]*\b([a-z0-9]{6,10})\b', content_lower)
         if loc_match and loc_match.group(1) != "number":
             result["confirmation_code"] = loc_match.group(1).upper()
         else:
@@ -199,7 +287,8 @@ Ensure:
         date_patterns = [
             r'\b(\d{4})-(\d{2})-(\d{2})\b', # YYYY-MM-DD
             r'\b(\d{2})/(\d{2})/(\d{4})\b', # MM/DD/YYYY
-            r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})\b,?\s*\b(\d{4})\b' # Month DD, YYYY
+            r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})\b,?\s*\b(\d{4})\b', # Month DD, YYYY
+            r'\b(\d{1,2})[\s-](jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[\s-](\d{4})\b' # DD Month YYYY or DD-Month-YYYY
         ]
         
         found_dates = []
@@ -210,12 +299,18 @@ Ensure:
                     if len(m.groups()) == 3:
                         if m.group(1).isdigit() and len(m.group(1)) == 4:
                             d = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-                        elif m.group(1).isdigit() and len(m.group(1)) == 2:
+                        elif m.group(1).isdigit() and len(m.group(1)) == 2 and not m.group(2).isalpha():
+                            # MM/DD/YYYY
                             d = datetime.date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
                         else:
+                            # Month parsing (either Month DD, YYYY or DD Month YYYY)
                             months = {"jan":1, "feb":2, "mar":3, "apr":4, "may":5, "jun":6, "jul":7, "aug":8, "sep":9, "oct":10, "nov":11, "dec":12}
-                            month_num = months[m.group(1)[:3]]
-                            d = datetime.date(int(m.group(3)), month_num, int(m.group(2)))
+                            if m.group(1)[:3].lower() in months:
+                                month_num = months[m.group(1)[:3].lower()]
+                                d = datetime.date(int(m.group(3)), month_num, int(m.group(2)))
+                            else:
+                                month_num = months[m.group(2)[:3].lower()]
+                                d = datetime.date(int(m.group(3)), month_num, int(m.group(1)))
                         found_dates.append(d)
                 except ValueError:
                     continue
@@ -313,7 +408,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
             
         return list(dict.fromkeys(clean_acts + enriched))
 
-    def import_confirmation_file(self, file_path: Path) -> int:
+    def import_confirmation_file(self, file_path: Path, audit_callback: Optional[Any] = None) -> int:
         """Parses a travel confirmation file, enriches it, and saves to database."""
         if not file_path.exists():
             raise FileNotFoundError(f"Confirmation file not found at: {file_path}")
@@ -362,6 +457,13 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
             "parsed_data": data
         }
         
+        # Run sentinel audit check if callback is provided
+        if audit_callback:
+            proceed = audit_callback(travel_content, metadata)
+            if not proceed:
+                logger.warning(f"Sentinel audit callback rejected entry for file: {file_path.name}")
+                return -1
+                
         memory_id = self.manager.add_memory(
             category="travel",
             content=travel_content,
@@ -369,7 +471,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
         )
         return memory_id
 
-    def import_confirmation_files(self, directory: Optional[Path] = None) -> List[int]:
+    def import_confirmation_files(self, directory: Optional[Path] = None, audit_callback: Optional[Any] = None) -> List[int]:
         """Scans the incoming travel directory for confirmation files, parses, and logs them."""
         workspace_dir = Path(__file__).resolve().parent.parent
         incoming_dir = directory or (workspace_dir / "data" / "incoming_travel")
@@ -387,7 +489,11 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
             for file_path in incoming_dir.glob(ext):
                 try:
                     logger.info(f"Processing travel confirmation file: {file_path.name}")
-                    mem_id = self.import_confirmation_file(file_path)
+                    mem_id = self.import_confirmation_file(file_path, audit_callback)
+                    if mem_id == -1:
+                        logger.warning(f"File skipped by sentinel check: {file_path.name}")
+                        continue
+                        
                     memory_ids.append(mem_id)
                     
                     # Move to processed directory
