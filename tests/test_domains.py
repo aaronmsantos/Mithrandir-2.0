@@ -621,3 +621,26 @@ def test_travel_ingestion_optimizations(tmp_path):
     assert (processed_dir / "pass.txt").exists()
     assert not (processed_dir / "block.txt").exists()
     assert file_block.exists()  # Kept in incoming directory
+    
+    # 5. Test native PDF ingestion with mock
+    from unittest.mock import MagicMock, patch
+    
+    pdf_file = incoming_dir / "flight_doc.pdf"
+    pdf_file.write_text("dummy binary pdf data")
+    
+    # Mock pypdf.PdfReader to simulate extracting text from PDF
+    mock_reader = MagicMock()
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = "Delta Airlines DL 100 JFK to AMS June 7, 2026 Confirmation: GDR5CV"
+    mock_reader.pages = [mock_page]
+    
+    with patch("pypdf.PdfReader", return_value=mock_reader):
+        pdf_id = travel.import_confirmation_file(pdf_file)
+        assert pdf_id > 0
+        
+        # Verify the database entry has the parsed text details
+        pdf_trip = travel.manager.get_memory(pdf_id)
+        assert pdf_trip is not None
+        assert pdf_trip["metadata"]["parsed_data"]["carrier"] == "Delta Airlines"
+        assert pdf_trip["metadata"]["parsed_data"]["flight_number"] == "DL100"
+        assert pdf_trip["metadata"]["parsed_data"]["confirmation_code"] == "GDR5CV"

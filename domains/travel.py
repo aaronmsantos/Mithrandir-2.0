@@ -413,8 +413,19 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
         if not file_path.exists():
             raise FileNotFoundError(f"Confirmation file not found at: {file_path}")
             
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
+        if file_path.suffix.lower() == ".pdf":
+            try:
+                import pypdf
+                reader = pypdf.PdfReader(file_path)
+                text_parts = []
+                for page in reader.pages:
+                    text_parts.append(page.extract_text() or "")
+                content = "\n".join(text_parts).strip()
+            except Exception as e:
+                raise ValueError(f"Failed to extract text from PDF: {e}")
+        else:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
             
         if not content:
             raise ValueError("Confirmation file is empty.")
@@ -485,7 +496,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
         processed_dir.mkdir(exist_ok=True)
         
         memory_ids = []
-        for ext in ["*.txt", "*.md", "*.html"]:
+        for ext in ["*.txt", "*.md", "*.html", "*.pdf"]:
             for file_path in incoming_dir.glob(ext):
                 try:
                     logger.info(f"Processing travel confirmation file: {file_path.name}")
