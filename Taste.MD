@@ -6,7 +6,12 @@ This file defines the core aesthetic, workflow, and engineering preferences of t
 
 ## 🎨 Aesthetic Coordinates & UI/UX
 
-*   **Vibe**: A fusion of **clean technical zen** and **electric neon wizard** (Apple-like clean lines and execution meets 80s/90s video game aesthetics).
+*   **Vibe & Visual DNA**: A fusion of **clean technical zen** and **electric neon wizardry** (Apple-like clean lines and execution meets 80s/90s retro video games), heavily informed by:
+    *   70s/80s punk & thrash metal aesthetics.
+    *   90s NY hip hop vibes and street aesthetics (lo-fi grittiness, Alchemist/MF Doom vibes).
+    *   80s/90s skater culture (e.g. *Thrasher Magazine* style - bold, counter-culture typography & high contrast).
+    *   NY 90s/2000s hardcore punk attitude and layouts.
+    *   Graffiti art styles and street culture.
 *   **Motif**: Magic-themed (🧙‍♂️, 🪄, 🔮, ✨, 🦾). Explicitly avoid standard corporate security shields (`🛡️`), generic tech symbols, or sterile placeholders.
 *   **Interface**: CLI-first and terminal-only. The command line *is* the dashboard. Output must be structured using `Rich` with distinct color palettes:
     *   `cyan` / `magenta` / `green` for primary statuses and headers.
