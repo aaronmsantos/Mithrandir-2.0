@@ -81,13 +81,17 @@ Use the Typer app to run the suit:
 4.  Diagnostics (`python main.py doctor`) must pass cleanly.
 
 ---
+## 🧭 Profile & Growth Coordinates ⚡️
 
-## 🧭 Profile & Growth Coordinates (Pending Inputs)
-These key questions define the customized cognitive layer of Mithrandir:
-1.  **GTM Engineering Stack (Fonoa)**: What is your primary tool/API stack at Fonoa?
-2.  **Investing Tickers & Risk**: Which specific assets/tickers do you run through the Confluence Framework most frequently, and what are your risk rules?
-3.  **Muay Thai**: What is your current training cadence/schedule and goals?
-4.  **Sports (Tottenham & Knicks)**: Would you like Mithrandir to track match schedules and transfer news?
+These coordinates define the customized cognitive layer of Mithrandir:
+*   **GTM Engineering Stack (Fonoa)**: Claude Code is the primary tool and work surface. Also utilizes Clay, Salesforce, HubSpot, Vercel, Base44, and Slack. Focuses on consistently improving mastery of IDEs and agentic coding platforms to maintain a position of strength at Fonoa.
+*   **Investing Tickers & Strategy**:
+    *   **Tickers**: IREN, PLTR, TE, ASTS, EOSE, ONDS, TMC, RIVN, SOFI, GOOGL, NVDA, COIN, REAL, ETHW.
+    *   **Style**: Pure individual stocks, trend/thematic investing, searching for asymmetric upside. Fearless when entering new positions.
+*   **Muay Thai Practice**:
+    *   **Cadence**: 3-6 times per week (1-2 hour sessions covering pads, drills, clinch, and sparring).
+    *   **History & Goals**: Training since 2017 with 3 smokers completed. Focuses on fitness, technical refinement, and being an experienced, supportive gym member.
+*   **Sports Teams**: Tottenham Hotspur (Football) and NY Knicks (Basketball). Keep in mind these are the operator's primary teams.
 
 ---
 

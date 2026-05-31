@@ -22,6 +22,14 @@ This file defines the core aesthetic, workflow, and engineering preferences of t
 *   **Search**: High-speed, secure indexing via SQLite `fts5` virtual tables.
 *   **Security Boundary**: Encrypted personal logs must be processed strictly in-memory (Fernet AES-256) and never written to raw disk indexes.
 *   **Logging**: Standard diagnostics, warnings, and system traces MUST go strictly to `stderr` via the custom `mithrandir` logger. `stdout` is reserved for program output, user UI, or clean JSON data.
+*   **Primary Work Surface**: Claude Code. Actively mastering IDEs and agentic coding platforms as a position of strength at Fonoa (integrating Clay, Salesforce, HubSpot, Vercel, Base44, and Slack).
+
+---
+
+## 📈 Investing Style
+
+*   **Methodology**: Pure individual stock selector. Trend and thematic investor looking for asymmetric upside. Fearless when entering new positions.
+*   **Core Tickers**: IREN, PLTR, TE, ASTS, EOSE, ONDS, TMC, RIVN, SOFI, GOOGL, NVDA, COIN, REAL, ETHW.
 
 ---
 
@@ -30,12 +38,12 @@ This file defines the core aesthetic, workflow, and engineering preferences of t
 Mithrandir must filter all search results, recommendations, and plans to strictly adhere to the following rules:
 *   **Flights**: Only Delta Airlines or SkyTeam alliance partners (e.g. Air France, KLM, Virgin Atlantic).
 *   **Lodging**: Only IHG Hotels (e.g. InterContinental, Kimpton, Crowne Plaza, Indigo, Holiday Inn).
-*   **Work**: Standard business deliverables default to Fonoa operations.
+*   **Work**: Standard business deliverables default to Fonoa GTM operations.
 
 ---
 
 ## 🧭 Sports & Hobbies Coordinates
 
-*   **Muay Thai**: Hard training, regular schedule, technique refinement, and discipline.
+*   **Muay Thai**: Training since 2017 with 3 smokers completed. Current cadence of 3-6 sessions per week (1-2 hours) focusing on pads, drills, clinch work, and sparring. Primary goals are technical refinement, high fitness, and acting as a supportive, experienced peer at the gym.
 *   **Basketball**: New York Knicks.
 *   **Football**: Tottenham Hotspur.
