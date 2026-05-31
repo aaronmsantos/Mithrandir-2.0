@@ -160,11 +160,15 @@ Ensure:
                 
         if not result["hotel_name"]:
             if "airbnb" in content_lower or "air bnb" in content_lower:
-                match = re.search(r'\b([A-Za-z0-9 \t\-]*airbnb[A-Za-z0-9 \t\-]*)\b', content_lower, re.IGNORECASE)
-                if match:
-                    result["hotel_name"] = match.group(1).strip().title()
+                listing_match = re.search(r'\b([a-z0-9 \t\-]+(?:apartment|loft|house|villa|studio|room|stay|home|cabin|suite|condo)(?:\s+in\s+[a-z \t\-]+)?)\b', content_lower, re.IGNORECASE)
+                if listing_match:
+                    result["hotel_name"] = f"Airbnb: {listing_match.group(1).strip().title()}"
                 else:
-                    result["hotel_name"] = "Airbnb"
+                    match = re.search(r'\b([A-Za-z0-9 \t\-]*airbnb[A-Za-z0-9 \t\-]*)\b', content_lower, re.IGNORECASE)
+                    if match:
+                        result["hotel_name"] = match.group(1).strip().title()
+                    else:
+                        result["hotel_name"] = "Airbnb"
             else:
                 hotel_match = re.search(r'\b([A-Za-z0-9 \t\-]+(?:hotel|resort|inn|lodging|suites))\b', content_lower)
                 if hotel_match:
@@ -179,7 +183,7 @@ Ensure:
             result["type"] = "hotel"
             
         # 3. Detect Confirmation Code
-        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|reference)\b\s*(?:number|num|no|code)?\s*:?\s*#?\s*\b([a-z0-9]{6,10})\b', content_lower)
+        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|reference)\b[ \t]*(?:number|num|no|code)?[ \t]*:?[ \t]*#?[ \t]*\b([a-z0-9]{6,10})\b', content_lower)
         if loc_match and loc_match.group(1) != "number":
             result["confirmation_code"] = loc_match.group(1).upper()
         else:
@@ -187,13 +191,14 @@ Ensure:
             if hashtag_match:
                 result["confirmation_code"] = hashtag_match.group(1).upper()
             else:
-                num_match = re.search(r'\b(?:confirmation|booking|reservation)\b\s*(?:number|num|no)?\s*:?\s*#?\s*\b(\d{6,10})\b', content_lower)
+                num_match = re.search(r'\b(?:confirmation|booking|reservation)\b[ \t]*(?:number|num|no)?[ \t]*:?[ \t]*#?[ \t]*\b(\d{6,10})\b', content_lower)
                 if num_match:
                     result["confirmation_code"] = num_match.group(1)
                 
         # 4. Parse Dates
         date_patterns = [
             r'\b(\d{4})-(\d{2})-(\d{2})\b', # YYYY-MM-DD
+            r'\b(\d{2})/(\d{2})/(\d{4})\b', # MM/DD/YYYY
             r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})\b,?\s*\b(\d{4})\b' # Month DD, YYYY
         ]
         
@@ -203,8 +208,10 @@ Ensure:
             for m in matches:
                 try:
                     if len(m.groups()) == 3:
-                        if m.group(1).isdigit():
+                        if m.group(1).isdigit() and len(m.group(1)) == 4:
                             d = datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                        elif m.group(1).isdigit() and len(m.group(1)) == 2:
+                            d = datetime.date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
                         else:
                             months = {"jan":1, "feb":2, "mar":3, "apr":4, "may":5, "jun":6, "jul":7, "aug":8, "sep":9, "oct":10, "nov":11, "dec":12}
                             month_num = months[m.group(1)[:3]]
@@ -233,16 +240,29 @@ Ensure:
         if route_match:
             result["destination"] = f"{route_match.group(1).upper()} to {route_match.group(2).upper()}"
         else:
-            city_match = re.search(r'\b(?:to|flying\s+to|arriving\s+in|trip\s+to)\s+([a-z\s]{3,20})\b', content_lower)
-            if city_match:
-                city = city_match.group(1).strip().title()
-                city_words = city.split()
-                clean_city_words = []
-                for w in city_words:
-                    if w.lower() in ["the", "a", "an", "on", "at", "for", "by", "with", "from"]:
+            listing_loc_match = re.search(r'\b(?:apartment|loft|house|villa|studio|room|stay|home|cabin|suite|condo)\s+in\s+([a-z \t\-]{3,20})\b', content_lower, re.IGNORECASE)
+            if listing_loc_match:
+                result["destination"] = listing_loc_match.group(1).strip().title()
+            else:
+                known_locations = ["amsterdam", "athens", "paris", "london", "tokyo", "miami", "vancouver", "puerto rico", "thailand", "spain"]
+                found_loc = None
+                for loc in known_locations:
+                    if loc in content_lower:
+                        found_loc = loc.title()
                         break
-                    clean_city_words.append(w)
-                result["destination"] = " ".join(clean_city_words) if clean_city_words else "Unknown Destination"
+                if found_loc:
+                    result["destination"] = found_loc
+                else:
+                    city_match = re.search(r'\b(?:to|flying\s+to|arriving\s+in|trip\s+to)\s+([a-z\s]{3,20})\b', content_lower)
+                    if city_match:
+                        city = city_match.group(1).strip().title()
+                        city_words = city.split()
+                        clean_city_words = []
+                        for w in city_words:
+                            if w.lower() in ["the", "a", "an", "on", "at", "for", "by", "with", "from"]:
+                                break
+                            clean_city_words.append(w)
+                        result["destination"] = " ".join(clean_city_words) if clean_city_words else "Unknown Destination"
                 
         return result
 
