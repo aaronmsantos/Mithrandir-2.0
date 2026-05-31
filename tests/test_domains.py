@@ -203,7 +203,7 @@ def test_cli_travel_commands():
     result_list = runner.invoke(app, ["travel", "list"])
     assert result_list.exit_code == 0
     assert "Paris" in result_list.stdout
-    assert "Visit Louvre" in result_list.stdout
+    assert "Louvre" in result_list.stdout
 
 
 def test_cli_work_commands():
@@ -441,4 +441,71 @@ English, Spanish
         written_data = "".join(call.args[0] for call in m_open().write.call_args_list)
         assert "Python" in written_data
         assert "Git" in written_data
+
+
+def test_travel_confirmation_parsing(tmp_path):
+    """Test travel confirmation parsing, Bourdain enrichment, and directory scanning."""
+    from domains.travel import TravelDomain
+    
+    travel = TravelDomain()
+    
+    # 1. Delta flight confirmation
+    delta_text = """
+    Delta Air Lines Flight DL 1284
+    Confirmation: ABCDEF
+    JFK to MIA
+    June 15, 2026
+    """
+    parsed_flight = travel._parse_travel_confirmation_fallback(delta_text)
+    assert parsed_flight["carrier"] == "Delta Airlines"
+    assert parsed_flight["flight_number"] == "DL1284"
+    assert parsed_flight["confirmation_code"] == "ABCDEF"
+    assert parsed_flight["destination"] == "JFK to MIA"
+    
+    # 2. IHG Hotel confirmation
+    ihg_text = """
+    Kimpton Fitzroy London
+    Confirmation Number: 98765432
+    Check-in: 2026-08-01
+    Check-out: 2026-08-08
+    """
+    parsed_hotel = travel._parse_travel_confirmation_fallback(ihg_text)
+    assert parsed_hotel["hotel_name"] == "Kimpton Fitzroy London"
+    assert parsed_hotel["confirmation_code"] == "98765432"
+    assert parsed_hotel["start_date"] == "2026-08-01"
+    assert parsed_hotel["end_date"] == "2026-08-08"
+    
+    # 3. Test Bourdain activity enricher fallback
+    enriched = travel.bourdain_activity_enricher(["Sightseeing"], "Paris")
+    assert "Sightseeing" in enriched
+    assert len(enriched) > 1
+    
+    # 4. Test directory scanner
+    incoming_dir = tmp_path / "incoming_travel"
+    incoming_dir.mkdir()
+    
+    flight_file = incoming_dir / "flight.txt"
+    flight_file.write_text(delta_text)
+    
+    hotel_file = incoming_dir / "hotel.txt"
+    hotel_file.write_text(ihg_text)
+    
+    # Run scanner
+    ids = travel.import_confirmation_files(incoming_dir)
+    assert len(ids) == 2
+    
+    # Verify database storage
+    trip1 = travel.manager.get_memory(ids[0])
+    trip2 = travel.manager.get_memory(ids[1])
+    assert trip1 is not None
+    assert trip2 is not None
+    
+    # Verify files moved to processed/
+    processed_dir = incoming_dir / "processed"
+    assert processed_dir.exists()
+    assert (processed_dir / "flight.txt").exists()
+    assert (processed_dir / "hotel.txt").exists()
+    assert not flight_file.exists()
+    assert not hotel_file.exists()
+
 

@@ -453,6 +453,44 @@ def prompt_optimize(
 
 # --- Travel Subcommands ---
 
+# --- Travel Subcommands and Helpers ---
+
+def _render_travel_details(data: Dict[str, Any]):
+    """Renders structured travel confirmation details nicely in the CLI."""
+    details_panel = (
+        f"[bold cyan]Type:[/bold cyan] {data.get('type', 'mixed').title()}\n"
+        f"[bold cyan]Destination:[/bold cyan] {data.get('destination', 'N/A')}\n"
+        f"[bold cyan]Dates:[/bold cyan] {data.get('start_date', 'N/A')} to {data.get('end_date', 'N/A')}\n"
+    )
+    if data.get("carrier"):
+        details_panel += f"[bold cyan]Carrier:[/bold cyan] {data['carrier']}\n"
+    if data.get("flight_number"):
+        details_panel += f"[bold cyan]Flight Number:[/bold cyan] {data['flight_number']}\n"
+    if data.get("hotel_name"):
+        details_panel += f"[bold cyan]Lodging / Hotel:[/bold cyan] {data['hotel_name']}\n"
+    if data.get("confirmation_code"):
+        details_panel += f"[bold cyan]Confirmation Code:[/bold cyan] {data['confirmation_code']}\n"
+        
+    console.print(Panel(
+        details_panel,
+        title="✈️ [bold green]Travel Confirmation Details[/bold green] ✈️",
+        border_style="green",
+        expand=False
+    ))
+    
+    activities = data.get("activities", [])
+    if activities:
+        console.print("[bold yellow]Enriched Activities (Bourdain Style):[/bold yellow]")
+        for act in activities:
+            console.print(f"  * {act}")
+        console.print("")
+        
+    packs = data.get("packing_list", [])
+    if packs:
+        console.print("[bold magenta]Packing List:[/bold magenta]")
+        console.print(f"  {', '.join(packs)}\n")
+
+
 @travel_app.command("add")
 def travel_add(
     destination: Optional[str] = typer.Option(None, "--destination", "-d", help="Travel destination"),
@@ -499,6 +537,77 @@ def travel_add(
     console.print(f"[bold green]✈️ Success![/bold green] Itinerary logged under travel (Memory ID: {memory_id}).")
 
 
+@travel_app.command("import")
+def travel_import(
+    file_or_dir: Optional[str] = typer.Argument(None, help="Path to travel confirmation file or directory. If omitted, scans 'data/incoming_travel/'.")
+):
+    """✈️ Import flight (Delta) and hotel (IHG) confirmations, parse details, and sync to memory."""
+    travel = TravelDomain()
+    
+    if file_or_dir:
+        path = Path(file_or_dir)
+        if not path.exists():
+            console.print(f"[bold red]❌ Path not found at: {path}[/bold red]")
+            raise typer.Exit(code=1)
+            
+        if path.is_file():
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+                
+            parsed = travel.parse_travel_confirmation(content)
+            
+            # Format text representation for Sentinel checks
+            type_str = parsed["type"].title()
+            details = []
+            if parsed.get("carrier"):
+                details.append(f"Carrier: {parsed['carrier']}")
+            if parsed.get("flight_number"):
+                details.append(f"Flight #: {parsed['flight_number']}")
+            if parsed.get("hotel_name"):
+                details.append(f"Lodging: {parsed['hotel_name']}")
+            if parsed.get("confirmation_code"):
+                details.append(f"Confirmation Code: {parsed['confirmation_code']}")
+                
+            travel_content = (
+                f"Parsed {type_str} Travel Confirmation for {parsed['destination']}.\n"
+                f"Dates: {parsed['start_date']} to {parsed['end_date']}\n"
+                f"{', '.join(details)}"
+            )
+            
+            # Run Sentinel audit check before storing
+            if not audit_and_confirm("travel", travel_content, {"type": "travel_confirmation", "parsed_data": parsed}):
+                console.print("[bold yellow]❌ Aborted travel import to prevent cognitive drift.[/bold yellow]")
+                raise typer.Exit(code=1)
+                
+            try:
+                memory_id = travel.import_confirmation_file(path)
+                console.print(f"[bold green]✨ Success![/bold green] Travel confirmation safely imported (Memory ID: {memory_id}). 🔮")
+                
+                # Show parsed details
+                _render_travel_details(travel.manager.get_memory(memory_id)["metadata"]["parsed_data"])
+            except Exception as e:
+                console.print(f"[bold red]❌ Import failed: {e}[/bold red]")
+                raise typer.Exit(code=1)
+                
+        else: # is directory
+            console.print(f"[bold magenta]⚡️ Scanning directory [cyan]{path}[/cyan] for travel confirmations...[/bold magenta]")
+            ids = travel.import_confirmation_files(path)
+            if ids:
+                console.print(f"[bold green]✨ Success![/bold green] Successfully imported {len(ids)} travel confirmations.")
+            else:
+                console.print("[bold yellow]No confirmation files found to process. ✈️[/bold yellow]")
+    else:
+        # Default directory scan
+        workspace_dir = Path(__file__).resolve().parent
+        incoming_dir = workspace_dir / "data" / "incoming_travel"
+        console.print(f"[bold magenta]⚡️ Scanning default incoming directory [cyan]{incoming_dir}[/cyan]...[/bold magenta]")
+        ids = travel.import_confirmation_files(incoming_dir)
+        if ids:
+            console.print(f"[bold green]✨ Success![/bold green] Successfully imported {len(ids)} travel confirmations.")
+        else:
+            console.print("[bold yellow]No confirmation files found in default incoming directory. ✈️[/bold yellow]")
+
+
 @travel_app.command("list")
 def travel_list():
     """✈️ List logged travel itineraries."""
@@ -513,19 +622,41 @@ def travel_list():
     table.add_column("ID", style="cyan")
     table.add_column("Destination", style="white bold")
     table.add_column("Dates", style="green")
+    table.add_column("Details", style="cyan")
     table.add_column("Activities", style="magenta")
     table.add_column("Packing List", style="yellow")
     
     for t in trips:
         meta = t["metadata"]
+        parsed = meta.get("parsed_data", {})
+        
+        # Details summary
+        details_list = []
+        if parsed:
+            if parsed.get("carrier"):
+                details_list.append(f"Carrier: {parsed['carrier']}")
+            if parsed.get("flight_number"):
+                details_list.append(f"Flight #: {parsed['flight_number']}")
+            if parsed.get("hotel_name"):
+                details_list.append(f"Hotel: {parsed['hotel_name']}")
+            if parsed.get("confirmation_code"):
+                details_list.append(f"Code: {parsed['confirmation_code']}")
+        else:
+            # Fallback for manual itineraries
+            pass
+            
+        details_str = "\n".join(details_list) if details_list else "Manual Entry"
+        
         table.add_row(
             str(t["id"]),
             meta.get("destination", "N/A"),
             f"{meta.get('start_date', 'N/A')} to {meta.get('end_date', 'N/A')}",
+            details_str,
             ", ".join(meta.get("activities", [])),
             ", ".join(meta.get("packing_list", []))
         )
     console.print(table)
+
 
 
 # --- Work Subcommands ---
