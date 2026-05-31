@@ -26,6 +26,7 @@ from domains.travel import TravelDomain
 from domains.work import WorkDomain
 from domains.projects import ProjectsDomain
 from domains.profile import ProfileDomain
+from domains.portfolio import PortfolioDomain, ACCOUNT_LABELS
 
 # Initialize Typer and Rich Console
 app = typer.Typer(help="🔮 Mithrandir 2.0 Command Line Interface ✨", rich_markup_mode="rich")
@@ -73,6 +74,7 @@ travel_app = typer.Typer(name="travel", help="✈️ Track travel itineraries an
 work_app = typer.Typer(name="work", help="💼 Track weekly work tasks and deliverables.")
 projects_app = typer.Typer(name="projects", help="🚀 Manage AI sprint backlogs and project tasks.")
 profile_app = typer.Typer(name="profile", help="🧙‍♂️ Manage your professional history and profile coordinates.")
+portfolio_app = typer.Typer(name="portfolio", help="💼 Ingest and track portfolio performance from statements.")
 
 app.add_typer(journal_app)
 app.add_typer(invest_app)
@@ -82,6 +84,7 @@ app.add_typer(travel_app)
 app.add_typer(work_app)
 app.add_typer(projects_app)
 app.add_typer(profile_app)
+app.add_typer(portfolio_app)
 
 
 # --- Root Commands ---
@@ -1208,6 +1211,260 @@ def profile_show():
             expand=False
         ))
 
+
+
+# --- Portfolio Commands ---
+
+@portfolio_app.command("ingest")
+def portfolio_ingest(
+    path: Optional[str] = typer.Option(None, "--path", "-p", help="Directory path containing statement PDFs. Defaults to Downloads folder.")
+):
+    """💼 Scan and ingest Apex Clearing PDF statements recursively."""
+    from pathlib import Path
+    if not path:
+        search_path = Path("/Users/aaronsantos/Downloads")
+    else:
+        search_path = Path(path)
+        
+    if not search_path.exists():
+        console.print(f"[bold red]❌ Search directory does not exist: {search_path}[/bold red]")
+        raise typer.Exit(code=1)
+        
+    console.print(f"🔮 [bold cyan]Scanning and ingesting statements from {search_path}...[/bold cyan]")
+    
+    portfolio = PortfolioDomain()
+    
+    with console.status("[bold green]Ingesting statements...") as status:
+        # Clear existing data first for a clean rebuild
+        portfolio.manager.clear_portfolio_data()
+        res = portfolio.ingest_statements_from_directory(search_path)
+        
+    console.print(Panel(
+        f"✅ [bold green]Ingestion Completed successfully![/bold green]\n\n"
+        f"📁 [bold]Total Files Scanned:[/bold] {res['total_scanned']}\n"
+        f"📄 [bold]Successfully Parsed PDFs:[/bold] {res['total_parsed']}\n"
+        f"🗄️ [bold]Statements Ingested into DB:[/bold] {res['ingested_statements']}\n"
+        f"📅 [bold]Unique Canonical Months:[/bold] {res['deduplicated_months']}\n"
+        f"⚠️ [bold]Duplicate Statements Flagged:[/bold] {res['duplicates_flagged']}\n"
+        f"❌ [bold]Unparseable/Skipped PDFs:[/bold] {res['errors']}",
+        title="💼 Portfolio Statement Ingest Report ✨",
+        border_style="green",
+        expand=False
+    ))
+
+
+@portfolio_app.command("validate")
+def portfolio_validate():
+    """📅 Audit and display statement coverage across Personal and Roth IRA accounts."""
+    portfolio = PortfolioDomain()
+    matrix = portfolio.get_coverage_matrix()
+    
+    if not matrix:
+        console.print("[bold yellow]No statement data found. Use 'portfolio ingest' first.[/bold yellow]")
+        return
+        
+    table = Table(title="📅 Portfolio Statement Monthly Coverage Audit", border_style="cyan")
+    table.add_column("Account", style="magenta")
+    table.add_column("Year", style="yellow")
+    table.add_column("Coverage Matrix (Months Jan-Dec)", style="green")
+    
+    for acct, years in sorted(matrix.items()):
+        for year, months in sorted(years.items()):
+            month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+            coverage_display = []
+            for m in range(1, 13):
+                if m in months:
+                    coverage_display.append(f"[bold green]{month_names[m-1]}[/bold green]")
+                else:
+                    coverage_display.append(f"[dim red]{month_names[m-1]}[/dim red]")
+            table.add_row(
+                ACCOUNT_LABELS.get(acct, acct),
+                year,
+                " | ".join(coverage_display)
+            )
+            
+    console.print(table)
+
+
+@portfolio_app.command("status")
+def portfolio_status():
+    """🧙‍♂️ Display summary of latest closing balances and top holdings."""
+    portfolio = PortfolioDomain()
+    statements = portfolio.manager.get_portfolio_statements(canonical_only=True)
+    
+    if not statements:
+        console.print("[bold yellow]No statements found. Use 'portfolio ingest' first.[/bold yellow]")
+        return
+        
+    latest_by_acct = {}
+    for s in statements:
+        latest_by_acct[s["account_key"]] = s
+        
+    table = Table(title="💼 Current Portfolio Balances (Latest Statements)", border_style="green")
+    table.add_column("Account Type", style="cyan")
+    table.add_column("Period End", style="yellow")
+    table.add_column("Cash (USD)", justify="right", style="green")
+    table.add_column("Securities (USD)", justify="right", style="green")
+    table.add_column("Total Value (USD)", justify="right", style="bold green")
+    
+    combined_cash = 0.0
+    combined_securities = 0.0
+    combined_total = 0.0
+    
+    for acct, label in ACCOUNT_LABELS.items():
+        s = latest_by_acct.get(acct)
+        if s:
+            cash = s["closing_cash"]
+            sec = s["closing_securities"]
+            tot = s["closing_total_value"]
+            combined_cash += cash
+            combined_securities += sec
+            combined_total += tot
+            table.add_row(
+                label,
+                s["period_end"],
+                f"USD {cash:,.2f}",
+                f"USD {sec:,.2f}",
+                f"USD {tot:,.2f}"
+            )
+            
+    table.add_row(
+        "[bold]Combined Portfolio[/bold]",
+        "",
+        f"[bold]USD {combined_cash:,.2f}[/bold]",
+        f"[bold]USD {combined_securities:,.2f}[/bold]",
+        f"[bold]USD {combined_total:,.2f}[/bold]"
+    )
+    
+    console.print(table)
+    
+    combined_positions = {}
+    for acct, s in latest_by_acct.items():
+        positions = portfolio.manager.get_statement_positions(s["statement_id"])
+        for p in positions:
+            ticker = p["ticker"]
+            combined_positions[ticker] = combined_positions.get(ticker, 0.0) + p["market_value"]
+            
+    if combined_positions:
+        pos_table = Table(title="🔥 Top Holdings Across All Accounts", border_style="yellow")
+        pos_table.add_column("Ticker", style="cyan")
+        pos_table.add_column("Total Market Value (USD)", justify="right", style="green")
+        pos_table.add_column("Allocation (%)", justify="right", style="white")
+        
+        sorted_pos = sorted(combined_positions.items(), key=lambda x: x[1], reverse=True)
+        for ticker, val in sorted_pos[:10]:
+            pct = (val / combined_total * 100) if combined_total > 0.0 else 0.0
+            pos_table.add_row(
+                ticker,
+                f"USD {val:,.2f}",
+                f"{pct:.2f}%"
+            )
+        console.print(pos_table)
+
+
+@portfolio_app.command("report")
+def portfolio_report(
+    period: str = typer.Option(..., "--period", "-p", help="Statement period end month to report (YYYY-MM).")
+):
+    """📊 Generate monthly report showing values, cash flows, and holdings."""
+    portfolio = PortfolioDomain()
+    statements = portfolio.manager.get_portfolio_statements(canonical_only=True)
+    
+    period_stmts = [s for s in statements if s["period_end"].startswith(period)]
+    if not period_stmts:
+        console.print(f"[bold red]❌ No statement records found for period: {period}[/bold red]")
+        raise typer.Exit(code=1)
+        
+    table = Table(title=f"📊 Monthly Portfolio Performance Report: {period}", border_style="magenta")
+    table.add_column("Account", style="cyan")
+    table.add_column("Opening Bal (USD)", justify="right")
+    table.add_column("Closing Bal (USD)", justify="right")
+    table.add_column("Net Deposits (USD)", justify="right")
+    table.add_column("Dividends/Interest (USD)", justify="right")
+    table.add_column("Net Gain/Loss (USD)", justify="right", style="bold green")
+    
+    total_open = 0.0
+    total_close = 0.0
+    total_dep = 0.0
+    total_wth = 0.0
+    total_inc = 0.0
+    
+    for s in period_stmts:
+        op = s["opening_total_value"]
+        cl = s["closing_total_value"]
+        dep = s["deposits"]
+        wth = s["withdrawals"]
+        inc = s["dividends_interest"]
+        net_cf = dep - wth
+        gain = cl - op - net_cf
+        
+        total_open += op
+        total_close += cl
+        total_dep += dep
+        total_wth += wth
+        total_inc += inc
+        
+        table.add_row(
+            ACCOUNT_LABELS.get(s["account_key"], s["account_key"]),
+            f"USD {op:,.2f}",
+            f"USD {cl:,.2f}",
+            f"USD {net_cf:,.2f}",
+            f"USD {inc:,.2f}",
+            f"USD {gain:,.2f}"
+        )
+        
+    comb_net_cf = total_dep - total_wth
+    comb_gain = total_close - total_open - comb_net_cf
+    table.add_row(
+        "[bold]Combined Portfolio[/bold]",
+        f"[bold]USD {total_open:,.2f}[/bold]",
+        f"[bold]USD {total_close:,.2f}[/bold]",
+        f"[bold]USD {comb_net_cf:,.2f}[/bold]",
+        f"[bold]USD {total_inc:,.2f}[/bold]",
+        f"[bold]USD {comb_gain:,.2f}[/bold]"
+    )
+    console.print(table)
+
+
+@portfolio_app.command("performance")
+def portfolio_performance():
+    """📈 Show comprehensive CAGR and YTD performance analytics."""
+    portfolio = PortfolioDomain()
+    metrics = portfolio.calculate_performance_metrics()
+    
+    if not metrics:
+        console.print("[bold yellow]No statements available. Use 'portfolio ingest' first.[/bold yellow]")
+        return
+        
+    table = Table(title="📈 Portfolio CAGR & YTD Performance Metrics", border_style="cyan")
+    table.add_column("Account Label", style="cyan")
+    table.add_column("Range", style="yellow")
+    table.add_column("Start Value (USD)", justify="right")
+    table.add_column("Current Value (USD)", justify="right")
+    table.add_column("CAGR (%)", justify="right", style="bold green")
+    table.add_column("2026 YTD Return (%)", justify="right", style="bold green")
+    table.add_column("TWR Cumulative (%)", justify="right", style="bold green")
+    
+    sort_keys = ["personal_brokerage", "roth_ira", "smart_portfolio", "combined"]
+    for key in sort_keys:
+        m = metrics.get(key)
+        if m:
+            cagr_pct = m["cagr"] * 100
+            ytd_pct = m["ytd_2026"] * 100
+            twr_pct = m["twr_cumulative_return"] * 100 if m["twr_cumulative_return"] is not None else 0.0
+            twr_str = f"{twr_pct:.2f}%" if m["twr_cumulative_return"] is not None else "N/A"
+            
+            table.add_row(
+                m["label"],
+                m["period_range"],
+                f"USD {m['start_value']:,.2f}",
+                f"USD {m['end_value']:,.2f}",
+                f"{cagr_pct:.2f}%",
+                f"{ytd_pct:.2f}%",
+                twr_str
+            )
+            
+    console.print(table)
 
 
 # --- Run Command (Interactive Router) ---

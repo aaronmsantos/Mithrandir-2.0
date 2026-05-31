@@ -123,6 +123,43 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
         )
     """)
     
+    # 4. Create portfolio_statements table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_statements (
+            statement_id TEXT PRIMARY KEY,
+            account_key TEXT NOT NULL,
+            account_number TEXT NOT NULL,
+            period_start TEXT NOT NULL,
+            period_end TEXT NOT NULL,
+            opening_total_value REAL NOT NULL,
+            closing_total_value REAL NOT NULL,
+            opening_cash REAL DEFAULT 0.0,
+            closing_cash REAL DEFAULT 0.0,
+            opening_securities REAL DEFAULT 0.0,
+            closing_securities REAL DEFAULT 0.0,
+            deposits REAL DEFAULT 0.0,
+            withdrawals REAL DEFAULT 0.0,
+            dividends_interest REAL DEFAULT 0.0,
+            file_path TEXT NOT NULL,
+            is_canonical INTEGER DEFAULT 1,
+            added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
+    # 5. Create portfolio_positions table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_positions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            statement_id TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            price REAL NOT NULL,
+            market_value REAL NOT NULL,
+            percent_of_account REAL,
+            FOREIGN KEY (statement_id) REFERENCES portfolio_statements (statement_id) ON DELETE CASCADE
+        )
+    """)
+    
     conn.commit()
     logger.info(f"Mithrandir 2.0 database tables initialized successfully at {db_path}.")
     return conn
@@ -499,18 +536,144 @@ class MemoryManager:
         return export_file
 
     def clear_all(self):
-        """Clear all content in memories, FTS, and playbook tables (for testing)."""
+        """Clear all content in memories, FTS, playbook, and portfolio tables (for testing)."""
         conn = self.get_connection()
         try:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM memories")
             cursor.execute("DELETE FROM memories_fts")
             cursor.execute("DELETE FROM playbook")
+            cursor.execute("DELETE FROM portfolio_positions")
+            cursor.execute("DELETE FROM portfolio_statements")
             conn.commit()
             logger.info("Purged all table records from the database.")
         except Exception as e:
             conn.rollback()
             logger.error(f"Failed to clear database: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def clear_portfolio_data(self):
+        """Clear only portfolio statements and positions from the database."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM portfolio_positions")
+            cursor.execute("DELETE FROM portfolio_statements")
+            conn.commit()
+            logger.info("Purged portfolio tables successfully.")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to clear portfolio tables: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def add_portfolio_statement(self, s: Dict[str, Any]) -> bool:
+        """Add or update a parsed portfolio statement in SQLite memory."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO portfolio_statements (
+                    statement_id, account_key, account_number, period_start, period_end,
+                    opening_total_value, closing_total_value, opening_cash, closing_cash,
+                    opening_securities, closing_securities, deposits, withdrawals,
+                    dividends_interest, file_path, is_canonical
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                s["statement_id"], s["account_key"], s["account_number"], s["period_start"], s["period_end"],
+                s["opening_total_value"], s["closing_total_value"], s.get("opening_cash", 0.0), s.get("closing_cash", 0.0),
+                s.get("opening_securities", 0.0), s.get("closing_securities", 0.0), s.get("deposits", 0.0),
+                s.get("withdrawals", 0.0), s.get("dividends_interest", 0.0), s["file_path"], s.get("is_canonical", 1)
+            ))
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to add portfolio statement {s.get('statement_id')}: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def add_portfolio_position(self, p: Dict[str, Any]) -> bool:
+        """Add a position snapshot holding associated with a statement."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO portfolio_positions (
+                    statement_id, ticker, quantity, price, market_value, percent_of_account
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                p["statement_id"], p["ticker"], p["quantity"], p["price"], p["market_value"], p.get("percent_of_account")
+            ))
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to add portfolio position for {p.get('statement_id')} / {p.get('ticker')}: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def get_portfolio_statements(self, account_key: Optional[str] = None, canonical_only: bool = True) -> List[Dict[str, Any]]:
+        """Retrieve statements chronologically. Filters by account and canonical choice."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT * FROM portfolio_statements"
+            params = []
+            conditions = []
+            if account_key:
+                conditions.append("account_key = ?")
+                params.append(account_key)
+            if canonical_only:
+                conditions.append("is_canonical = 1")
+            if conditions:
+                sql += " WHERE " + " AND ".join(conditions)
+            sql += " ORDER BY period_end ASC"
+            cursor.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to query portfolio statements: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def get_statement_positions(self, statement_id: str) -> List[Dict[str, Any]]:
+        """Retrieve all holdings associated with a specific statement."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM portfolio_positions WHERE statement_id = ?", (statement_id,))
+            return [dict(row) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to query portfolio positions for statement {statement_id}: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def mark_duplicate_statements(self, account_key: str, period_end: str, keep_statement_id: str):
+        """Deduplicate records by marking non-canonical duplicates for the same month/account."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE portfolio_statements
+                SET is_canonical = 0
+                WHERE account_key = ? AND period_end = ? AND statement_id != ?
+            """, (account_key, period_end, keep_statement_id))
+            cursor.execute("""
+                UPDATE portfolio_statements
+                SET is_canonical = 1
+                WHERE statement_id = ?
+            """, (keep_statement_id,))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to mark duplicate statements: {e}")
             raise
         finally:
             conn.close()
