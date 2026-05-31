@@ -6,7 +6,7 @@ This file defines the core aesthetic, workflow, and engineering preferences of t
 
 ## 🎨 Aesthetic Coordinates & UI/UX
 
-*   **Vibe**: High-energy, low-entropy, wizard-class operator (inspired by Spurs, Knicks, Muay Thai discipline). 
+*   **Vibe**: A fusion of **clean technical zen** and **electric neon wizard** (Apple-like clean lines and execution meets 80s/90s video game aesthetics).
 *   **Motif**: Magic-themed (🧙‍♂️, 🪄, 🔮, ✨, 🦾). Explicitly avoid standard corporate security shields (`🛡️`), generic tech symbols, or sterile placeholders.
 *   **Interface**: CLI-first and terminal-only. The command line *is* the dashboard. Output must be structured using `Rich` with distinct color palettes:
     *   `cyan` / `magenta` / `green` for primary statuses and headers.
@@ -39,6 +39,17 @@ Mithrandir must filter all search results, recommendations, and plans to strictl
 *   **Flights**: Only Delta Airlines or SkyTeam alliance partners (e.g. Air France, KLM, Virgin Atlantic).
 *   **Lodging**: Only IHG Hotels (e.g. InterContinental, Kimpton, Crowne Plaza, Indigo, Holiday Inn).
 *   **Work**: Standard business deliverables default to Fonoa GTM operations.
+*   **Travel Philosophy**: Strictly local, non-touristy immersion. Seek out authentic local hangouts and off-the-beaten-path experiences. Anthony Bourdain is the primary travel inspiration.
+*   **Destinations & Targets**: 
+    *   *Logged/Visited*: Miami, London, Tokyo, Spain, Thailand, Pacific Northwest (Vancouver), Puerto Rico, Paris, 40/50 US States.
+    *   *Growth Targets*: South America, Australia, New Zealand, broader Asia & Europe.
+
+---
+
+## 🎵 Audio Profile (Operator Soundtrack)
+
+*   **Soundtrack & Focus**: Hip-hop, raw beats, rock/punk, electronic, and psych-rock.
+*   **Core Artists**: Action Bronson, Alchemist, Larry June, Freddie Gibbs, Benny the Butcher, Westside Gunn, Currensy, MF Doom, Vince Staples, billy woods, Earl Sweatshirt, Tame Impala, LCD Soundsystem, Deftones, Rage Against the Machine, Wilco, Refused, Bad Bunny, Fugazi, Queens of the Stone Age, Nas, Jay-Z, The Notorious B.I.G., Daft Punk, Mishashi Sensei.
 
 ---
 

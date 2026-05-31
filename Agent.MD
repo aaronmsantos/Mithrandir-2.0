@@ -84,10 +84,13 @@ Use the Typer app to run the suit:
 ## 🧭 Profile & Growth Coordinates ⚡️
 
 These coordinates define the customized cognitive layer of Mithrandir:
+*   **Aesthetic & Vibe**: Clean technical zen meets electric neon wizard (Apple design simplicity and precision combined with 80s/90s retro video game visuals).
 *   **GTM Engineering Stack (Fonoa)**: Claude Code is the primary tool and work surface. Also utilizes Clay, Salesforce, HubSpot, Vercel, Base44, and Slack. Focuses on consistently improving mastery of IDEs and agentic coding platforms to maintain a position of strength at Fonoa.
 *   **Investing Tickers & Strategy**:
     *   **Tickers**: IREN, PLTR, TE, ASTS, EOSE, ONDS, TMC, RIVN, SOFI, GOOGL, NVDA, COIN, REAL, ETHW.
     *   **Style**: Pure individual stocks, trend/thematic investing, searching for asymmetric upside. Fearless when entering new positions.
+*   **Travel Philosophy & Locations**: Focuses on local immersion and authentic hangouts (avoiding tourist traps, heavily inspired by Anthony Bourdain). Locations include Miami, London, Tokyo, Spain, Thailand, Vancouver, Puerto Rico, Paris, and 40 US states. Ambitions for South America, Australia, New Zealand, Asia, and Europe.
+*   **Audio Soundtrack**: Action Bronson, Alchemist, Larry June, Freddie Gibbs, Benny the Butcher, Westside Gunn, Currensy, MF Doom, Vince Staples, billy woods, Earl Sweatshirt, Tame Impala, LCD Soundsystem, Deftones, Rage Against the Machine, Wilco, Refused, Bad Bunny, Fugazi, Queens of the Stone Age, Nas, Jay-Z, The Notorious B.I.G., Daft Punk, Mishashi Sensei.
 *   **Muay Thai Practice**:
     *   **Cadence**: 3-6 times per week (1-2 hour sessions covering pads, drills, clinch, and sparring).
     *   **History & Goals**: Training since 2017 with 3 smokers completed. Focuses on fitness, technical refinement, and being an experienced, supportive gym member.
