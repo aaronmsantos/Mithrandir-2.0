@@ -172,13 +172,17 @@ Ensure:
             result["type"] = "hotel"
             
         # 3. Detect Confirmation Code
-        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|reference)\b\s*(?:number|num|no)?\s*:?\s*#?\s*\b([a-z0-9]{6})\b', content_lower)
+        loc_match = re.search(r'\b(?:confirmation|locator|record|booking\s*ref|reference)\b\s*(?:number|num|no|code)?\s*:?\s*#?\s*\b([a-z0-9]{6})\b', content_lower)
         if loc_match and loc_match.group(1) != "number":
             result["confirmation_code"] = loc_match.group(1).upper()
         else:
-            num_match = re.search(r'\b(?:confirmation|booking|reservation)\b\s*(?:number|num|no)?\s*:?\s*#?\s*\b(\d{6,10})\b', content_lower)
-            if num_match:
-                result["confirmation_code"] = num_match.group(1)
+            hashtag_match = re.search(r'#([a-z0-9]{6})\b', content_lower)
+            if hashtag_match:
+                result["confirmation_code"] = hashtag_match.group(1).upper()
+            else:
+                num_match = re.search(r'\b(?:confirmation|booking|reservation)\b\s*(?:number|num|no)?\s*:?\s*#?\s*\b(\d{6,10})\b', content_lower)
+                if num_match:
+                    result["confirmation_code"] = num_match.group(1)
                 
         # 4. Parse Dates
         date_patterns = [
@@ -202,13 +206,16 @@ Ensure:
                 except ValueError:
                     continue
                     
-        found_dates = sorted(list(set(found_dates)))
+        found_dates = sorted(found_dates)
         if len(found_dates) >= 1:
             result["start_date"] = found_dates[0].isoformat()
             if len(found_dates) >= 2:
-                result["end_date"] = found_dates[1].isoformat()
+                result["end_date"] = found_dates[-1].isoformat()
             else:
-                result["end_date"] = (found_dates[0] + datetime.timedelta(days=7)).isoformat()
+                if result["type"] == "flight":
+                    result["end_date"] = result["start_date"]
+                else:
+                    result["end_date"] = (found_dates[0] + datetime.timedelta(days=7)).isoformat()
         else:
             today = datetime.date.today()
             result["start_date"] = today.isoformat()
@@ -320,6 +327,11 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
         metadata = {
             "source_file": file_path.name,
             "type": "travel_confirmation",
+            "destination": data["destination"],
+            "start_date": data["start_date"],
+            "end_date": data["end_date"],
+            "activities": enriched_acts,
+            "packing_list": data.get("packing_list", []),
             "parsed_data": data
         }
         

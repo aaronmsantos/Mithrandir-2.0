@@ -647,13 +647,19 @@ def travel_list():
             
         details_str = "\n".join(details_list) if details_list else "Manual Entry"
         
+        dest = meta.get("destination") or parsed.get("destination", "N/A")
+        start = meta.get("start_date") or parsed.get("start_date", "N/A")
+        end = meta.get("end_date") or parsed.get("end_date", "N/A")
+        acts = meta.get("activities") or parsed.get("activities", [])
+        packs = meta.get("packing_list") or parsed.get("packing_list", [])
+        
         table.add_row(
             str(t["id"]),
-            meta.get("destination", "N/A"),
-            f"{meta.get('start_date', 'N/A')} to {meta.get('end_date', 'N/A')}",
+            dest,
+            f"{start} to {end}",
             details_str,
-            ", ".join(meta.get("activities", [])),
-            ", ".join(meta.get("packing_list", []))
+            ", ".join(acts),
+            ", ".join(packs)
         )
     console.print(table)
 

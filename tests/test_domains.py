@@ -462,6 +462,33 @@ def test_travel_confirmation_parsing(tmp_path):
     assert parsed_flight["confirmation_code"] == "ABCDEF"
     assert parsed_flight["destination"] == "JFK to MIA"
     
+    # 1b. Delta flight confirmation with "Confirmation Code:" and same-day/multi-day dates
+    delta_text2 = """
+    Delta Air Lines Flight
+    Confirmation Code: GDR5CV
+    Destination: Amsterdam, Netherlands
+    Route: JFK to AMS
+    Depart: June 7, 2026
+    Arrive: June 8, 2026
+    """
+    parsed_flight2 = travel._parse_travel_confirmation_fallback(delta_text2)
+    assert parsed_flight2["confirmation_code"] == "GDR5CV"
+    assert parsed_flight2["start_date"] == "2026-06-07"
+    assert parsed_flight2["end_date"] == "2026-06-08"
+
+    # 1c. Single-day flight confirmation
+    delta_text3 = """
+    Delta Air Lines Flight
+    Confirmation Code: GDN4HF
+    Route: CDG to ATH
+    Depart: June 15, 2026
+    Arrive: June 15, 2026
+    """
+    parsed_flight3 = travel._parse_travel_confirmation_fallback(delta_text3)
+    assert parsed_flight3["confirmation_code"] == "GDN4HF"
+    assert parsed_flight3["start_date"] == "2026-06-15"
+    assert parsed_flight3["end_date"] == "2026-06-15"
+    
     # 2. IHG Hotel confirmation
     ihg_text = """
     Kimpton Fitzroy London
