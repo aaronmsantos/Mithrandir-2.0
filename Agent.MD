@@ -86,7 +86,7 @@ Use the Typer app to run the suit:
 
 These coordinates define the customized cognitive layer of Mithrandir:
 *   **Aesthetic & Vibe**: Clean technical zen meets electric neon wizard (Apple design simplicity and precision combined with 80s/90s retro video game visuals), heavily influenced by 70s/80s punk & thrash metal, 90s NY hip hop, 80s/90s skater culture (Thrasher Magazine), NY 90s/2000s hardcore punk, and graffiti art styles.
-*   **GTM Engineering Stack (Fonoa)**: Claude Code is the primary tool and work surface. Also utilizes Clay, Salesforce, HubSpot, Vercel, Base44, and Slack. Focuses on consistently improving mastery of IDEs and agentic coding platforms to maintain a position of strength at Fonoa.
+*   **GTM Engineering Stack (Fonoa)**: Claude Code is the primary tool and work surface. Also utilizes Claude Code, Clay, Salesforce, HubSpot, Vercel, Base44, and Slack. Focuses on consistently improving mastery of IDEs and agentic coding platforms to maintain a position of strength at Fonoa.
 *   **Investing Tickers & Strategy**:
     *   **Tickers**: IREN, PLTR, TE, ASTS, EOSE, ONDS, TMC, RIVN, SOFI, GOOGL, NVDA, COIN, REAL, ETHW.
     *   **Style**: Pure individual stocks, trend/thematic investing, searching for asymmetric upside. Fearless when entering new positions.

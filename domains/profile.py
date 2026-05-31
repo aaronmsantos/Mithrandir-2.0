@@ -117,6 +117,13 @@ Ensure:
             "languages": ["languages"]
         }
         
+        ignored_headers = [
+            "volunteering", "licenses & certifications", "certifications", "recommendations", 
+            "interests", "activity", "honors & awards", "organizations", "projects", "publications",
+            "people you may know", "you might like", "groups", "companies", "schools", "analytics",
+            "received", "given", "top voices", "show all"
+        ]
+        
         sections_content = {k: [] for k in headers_map.keys()}
         
         def detect_section(line: str) -> Optional[str]:
@@ -131,6 +138,13 @@ Ensure:
             if detected:
                 current_section = detected
                 continue
+                
+            # Check for ignored sections to reset parsing
+            l_clean = line.lower().strip().rstrip(":")
+            if l_clean in ignored_headers:
+                current_section = None
+                continue
+                
             if current_section:
                 sections_content[current_section].append(line)
                 
@@ -146,7 +160,7 @@ Ensure:
             # Strip bullet characters
             s_cleaned = re.sub(r'^[•\-\*\d\.\s]+', '', s).strip()
             if s_cleaned:
-                if "," in s_cleaned and len(s_cleaned) < 100:
+                if "," in s_cleaned and len(s_cleaned) < 1000:
                     skills_list.extend([x.strip() for x in s_cleaned.split(",") if x.strip()])
                 else:
                     skills_list.append(s_cleaned)
@@ -169,9 +183,9 @@ Ensure:
         # Parse Experience (look for date patterns as anchors)
         exp_lines = [l for l in sections_content["experience"] if l]
         date_pattern = re.compile(
-            r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December|\d{4})'
-            r'.*?\s*-\s*.*?'
-            r'(Present|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December|\d{4})',
+            r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December|\d{4})\b'
+            r'.*?\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|–|—|to)\s*.*?'
+            r'\b(Present|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December|\d{4})\b',
             re.IGNORECASE
         )
         
