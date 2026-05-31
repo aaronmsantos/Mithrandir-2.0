@@ -517,3 +517,457 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
                     logger.error(f"Failed to process confirmation file '{file_path.name}': {e}")
                     
         return memory_ids
+
+    def parse_pdf_mqd_activities(self, pdf_path: Path) -> List[Dict[str, Any]]:
+        """Parses a Delta Account Activity PDF and extracts flights, card boosts, and headstarts."""
+        import pypdf
+        reader = pypdf.PdfReader(pdf_path)
+        text_parts = []
+        for page in reader.pages:
+            text_parts.append(page.extract_text() or "")
+        text = "\n".join(text_parts)
+        
+        lines = text.splitlines()
+        activities = []
+        
+        months_map = {
+            "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+            "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
+        }
+
+        def parse_dt(date_str):
+            date_str = date_str.lower().strip()
+            match = re.search(r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s*(\d{4})\b', date_str)
+            if match:
+                m_name, day, year = match.groups()
+                return f"{year}-{months_map[m_name]:02d}-{int(day):02d}"
+            return None
+
+        # Transaction/flight boundary headers
+        stop_patterns = [
+            r'^[A-Z]{3}\s+[A-Z]{3}', # Route
+            r'MQD Boost',
+            r'MQD Headstart',
+            r'Delta SkyMiles',
+            r'Delta Amex',
+            r'DL\s+Amex',
+            r'Uber\s+',
+            r'UBER\s+',
+            r'Miles Upgrade'
+        ]
+
+        def should_stop(line_str):
+            for pattern in stop_patterns:
+                if re.search(pattern, line_str, re.IGNORECASE):
+                    return True
+            return False
+
+        idx = 0
+        while idx < len(lines):
+            line = lines[idx].strip()
+            if not line:
+                idx += 1
+                continue
+                
+            # 1. Match Flight Route
+            route_match = re.match(r'^([A-Z]{3})\s+([A-Z]{3})(?:\s+([A-Z]{2})\s*(\d{1,4}))?$', line)
+            if route_match:
+                origin, dest, carrier_code, flight_num = route_match.groups()
+                
+                date = None
+                miles = None
+                mqds = None
+                ticket = None
+                is_pending = False
+                
+                next_idx = idx + 1
+                while next_idx < len(lines):
+                    l_next = lines[next_idx].strip()
+                    if not l_next:
+                        next_idx += 1
+                        continue
+                    if should_stop(l_next):
+                        break
+                    if not date:
+                        dt_check = parse_dt(l_next)
+                        if dt_check:
+                            date = dt_check
+                            if "pending" in l_next.lower():
+                                is_pending = True
+                    if miles is None:
+                        miles_m = re.search(r'([\d,]+)\s*miles', l_next, re.IGNORECASE)
+                        if miles_m:
+                            miles = int(miles_m.group(1).replace(",", ""))
+                    if mqds is None:
+                        mqds_m = re.search(r'\$?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
+                        if mqds_m:
+                            mqds = int(mqds_m.group(1).replace(",", ""))
+                    if not ticket:
+                        ticket_m = re.search(r'ticket#?\s*(\d+)', l_next, re.IGNORECASE)
+                        if ticket_m:
+                            ticket = ticket_m.group(1)
+                    next_idx += 1
+                    
+                if date:
+                    activities.append({
+                        "type": "flight",
+                        "origin": origin,
+                        "destination": dest,
+                        "route": f"{origin} to {dest}",
+                        "date": date,
+                        "carrier": "Delta Airlines" if (not carrier_code or carrier_code in ["DL", "DL "]) else carrier_code,
+                        "flight_number": f"{carrier_code or 'DL'}{flight_num}" if flight_num else None,
+                        "miles": miles,
+                        "mqds": mqds,
+                        "ticket_number": ticket,
+                        "status": "Pending" if is_pending else "Posted"
+                    })
+                    
+            # 2. Match Card Headstart
+            elif "mqd headstart" in line.lower():
+                next_idx = idx + 1
+                date = None
+                mqds = None
+                card_name = line.strip()
+                
+                while next_idx < len(lines):
+                    l_next = lines[next_idx].strip()
+                    if not l_next:
+                        next_idx += 1
+                        continue
+                    if should_stop(l_next):
+                        break
+                    dt_check = parse_dt(l_next)
+                    if dt_check:
+                        date = dt_check
+                    mqds_m = re.search(r'\$?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
+                    if mqds_m:
+                        mqds = int(mqds_m.group(1).replace(",", ""))
+                    next_idx += 1
+                    
+                if date and mqds:
+                    activities.append({
+                        "type": "card_headstart",
+                        "card_name": card_name,
+                        "date": date,
+                        "mqds": mqds
+                    })
+                    
+            # 3. Match Card Boost
+            elif "mqd boost" in line.lower():
+                next_idx = idx + 1
+                date = None
+                mqds = None
+                card_name = line.strip()
+                
+                while next_idx < len(lines):
+                    l_next = lines[next_idx].strip()
+                    if not l_next:
+                        next_idx += 1
+                        continue
+                    if should_stop(l_next):
+                        break
+                    dt_check = parse_dt(l_next)
+                    if dt_check:
+                        date = dt_check
+                    mqds_m = re.search(r'\$?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
+                    if mqds_m:
+                        mqds = int(mqds_m.group(1).replace(",", ""))
+                    next_idx += 1
+                    
+                if date and mqds:
+                    activities.append({
+                        "type": "card_boost",
+                        "card_name": card_name,
+                        "date": date,
+                        "mqds": mqds
+                    })
+                    
+            idx += 1
+            
+        return activities
+
+    def ingest_pdf_activities(self, pdf_path: Path) -> Dict[str, int]:
+        """Ingests all parsed PDF flight and card MQD transactions into travel memories."""
+        parsed_activities = self.parse_pdf_mqd_activities(pdf_path)
+        existing_memories = self.manager.search_memories(category="travel")
+        
+        enriched_count = 0
+        added_count = 0
+        
+        for act in parsed_activities:
+            if act["type"] == "flight":
+                # Check for existing flight to enrich
+                route = act["route"]
+                date = act["date"]
+                matched_mem = None
+                for mem in existing_memories:
+                    mem_meta = mem.get("metadata", {})
+                    dest = mem_meta.get("destination", "").lower()
+                    start_date = mem_meta.get("start_date", "")
+                    
+                    route_parts = route.lower().split(" to ")
+                    route_match = (route_parts[0] in dest or route_parts[1] in dest or dest in route.lower())
+                    date_match = (start_date == date)
+                    
+                    if route_match and date_match:
+                        matched_mem = mem
+                        break
+                        
+                if matched_mem:
+                    # Enrich existing
+                    mem_id = matched_mem["id"]
+                    metadata = matched_mem.get("metadata", {})
+                    if "parsed_data" not in metadata:
+                        metadata["parsed_data"] = {}
+                    
+                    # Merge keys
+                    metadata["parsed_data"]["miles"] = act.get("miles")
+                    metadata["parsed_data"]["mqds"] = act.get("mqds")
+                    metadata["parsed_data"]["ticket_number"] = act.get("ticket_number")
+                    metadata["parsed_data"]["status"] = act.get("status")
+                    
+                    # Update database directly
+                    import sqlite3
+                    conn = sqlite3.connect(self.manager.db_path)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "UPDATE memories SET metadata = ? WHERE id = ?",
+                        (json.dumps(metadata), mem_id)
+                    )
+                    conn.commit()
+                    conn.close()
+                    enriched_count += 1
+                else:
+                    # Add new historical flight
+                    carrier = act["carrier"]
+                    flight_num = act["flight_number"]
+                    miles_str = f"{act['miles']:,} Miles" if act.get("miles") else "N/A Miles"
+                    mqds_str = f"${act['mqds']:,} MQDs" if act.get("mqds") else "N/A MQDs"
+                    ticket_str = f"Ticket: {act['ticket_number']}" if act.get("ticket_number") else "No Ticket #"
+                    status = act["status"]
+                    
+                    content = (
+                        f"Historical Flight: {route}\n"
+                        f"Date: {date}\n"
+                        f"Carrier: {carrier} ({flight_num or 'N/A'})\n"
+                        f"Status: {status}\n"
+                        f"Metrics: {miles_str}, {mqds_str}\n"
+                        f"{ticket_str}"
+                    )
+                    
+                    new_meta = {
+                        "source_file": pdf_path.name,
+                        "type": "historical_flight",
+                        "destination": route,
+                        "start_date": date,
+                        "end_date": date,
+                        "activities": [
+                            "Explore local neighborhood food markets away from city centers.",
+                            "Seek out family-owned, long-running street vendors and tavernas.",
+                            "Avoid main tourist plazas and restaurants with English-only photo menus.",
+                            "Get lost in residential quarters and talk to neighborhood residents."
+                        ],
+                        "packing_list": [],
+                        "parsed_data": act
+                    }
+                    self.manager.add_memory(
+                        category="travel",
+                        content=content,
+                        metadata=new_meta
+                    )
+                    added_count += 1
+            else:
+                # Card Headstart or Card Boost
+                card_name = act["card_name"]
+                date = act["date"]
+                mqds = act["mqds"]
+                act_type = act["type"]
+                
+                # Check duplicate card boost/headstart
+                exists = False
+                for mem in existing_memories:
+                    mem_meta = mem.get("metadata", {})
+                    if (mem_meta.get("type") == act_type and 
+                        mem_meta.get("card_name") == card_name and 
+                        mem_meta.get("start_date") == date and 
+                        mem_meta.get("mqds") == mqds):
+                        exists = True
+                        break
+                        
+                if not exists:
+                    type_title = "Card Headstart" if act_type == "card_headstart" else "Card Boost"
+                    content = f"{type_title}: {card_name}\nDate: {date}\nMQDs: ${mqds:,}"
+                    new_meta = {
+                        "source_file": pdf_path.name,
+                        "type": act_type,
+                        "card_name": card_name,
+                        "start_date": date,
+                        "end_date": date,
+                        "mqds": mqds
+                    }
+                    self.manager.add_memory(
+                        category="travel",
+                        content=content,
+                        metadata=new_meta
+                    )
+                    added_count += 1
+                    
+        return {"enriched": enriched_count, "added": added_count}
+
+    def get_ytd_mqd_summary(self, year: Optional[int] = None) -> Dict[str, Any]:
+        """Summarizes year-to-date MQD status metrics and progress toward tiers."""
+        if year is None:
+            year = datetime.date.today().year
+            
+        mems = self.manager.search_memories(category="travel")
+        
+        flights_mqds = 0
+        headstart_mqds = 0
+        boost_mqds = 0
+        other_mqds = 0
+        
+        flights_list = []
+        card_items = []
+        
+        for mem in mems:
+            meta = mem.get("metadata", {})
+            start_date = meta.get("start_date", "")
+            if not start_date or not start_date.startswith(str(year)):
+                continue
+                
+            mem_type = meta.get("type", "")
+            parsed_data = meta.get("parsed_data", {})
+            
+            # Extract MQDs
+            val = 0
+            if "mqds" in meta:
+                val = int(meta["mqds"])
+            elif "mqds" in parsed_data:
+                val = int(parsed_data["mqds"]) if parsed_data.get("mqds") is not None else 0
+            else:
+                mqd_match = re.search(r'\$?([\d,]+)\s*mqds', mem.get("content", ""), re.IGNORECASE)
+                if mqd_match:
+                    val = int(mqd_match.group(1).replace(",", ""))
+                    
+            if val <= 0:
+                continue
+                
+            if mem_type == "card_headstart":
+                headstart_mqds += val
+                card_items.append({"type": "Headstart", "name": meta.get("card_name"), "date": start_date, "mqds": val})
+            elif mem_type == "card_boost":
+                boost_mqds += val
+                card_items.append({"type": "Spend Boost", "name": meta.get("card_name"), "date": start_date, "mqds": val})
+            elif mem_type in ["historical_flight", "travel_confirmation"] or parsed_data.get("type") == "flight":
+                flights_mqds += val
+                carrier = parsed_data.get("carrier") or meta.get("carrier") or "Delta Airlines"
+                fl_num = parsed_data.get("flight_number") or meta.get("flight_number") or "DL"
+                flights_list.append({
+                    "route": meta.get("destination") or parsed_data.get("destination") or "Unknown Flight",
+                    "date": start_date,
+                    "carrier": carrier,
+                    "flight_number": fl_num,
+                    "mqds": val,
+                    "status": parsed_data.get("status") or "Posted"
+                })
+            else:
+                other_mqds += val
+                
+        total_mqds = flights_mqds + headstart_mqds + boost_mqds + other_mqds
+        
+        # Thresholds
+        tiers = {
+            "Silver": 5000,
+            "Gold": 10000,
+            "Platinum": 15000,
+            "Diamond": 28000
+        }
+        
+        progress = {}
+        for name, threshold in tiers.items():
+            pct = (total_mqds / threshold) * 100
+            progress[name] = {
+                "threshold": threshold,
+                "percentage": min(100.0, pct),
+                "needed": max(0, threshold - total_mqds)
+            }
+            
+        # Pacing calculations
+        today = datetime.date.today()
+        end_of_year = datetime.date(year, 12, 31)
+        days_left = max(1, (end_of_year - today).days)
+        
+        diamond_needed = progress["Diamond"]["needed"]
+        daily_pace_required = diamond_needed / days_left
+        
+        return {
+            "year": year,
+            "total_mqds": total_mqds,
+            "breakdown": {
+                "flights": flights_mqds,
+                "headstarts": headstart_mqds,
+                "boosts": boost_mqds,
+                "other": other_mqds
+            },
+            "flights": sorted(flights_list, key=lambda x: x["date"]),
+            "cards": sorted(card_items, key=lambda x: x["date"]),
+            "tiers": progress,
+            "days_remaining": days_left,
+            "daily_pace_required": daily_pace_required
+        }
+
+    def calculate_partner_mqd(
+        self,
+        carrier: str,
+        distance: float,
+        fare_class: str,
+        ticket_price: float
+    ) -> Dict[str, Any]:
+        """Calculates expected MQD earnings and MQD-to-Cost ratio for flights."""
+        carrier_lower = carrier.lower()
+        fare_class_upper = fare_class.upper().strip()
+        
+        is_partner = False
+        partner_partners = ["air france", "klm", "virgin atlantic", "aeromexico", "korean air", "af", "kl", "vs", "am", "ke"]
+        for p in partner_partners:
+            if p in carrier_lower:
+                is_partner = True
+                break
+                
+        mqds = 0
+        method = ""
+        
+        if is_partner:
+            method = "Distance-based Partner Earning"
+            if fare_class_upper in ["J", "C", "D", "I", "Z"]: # Business
+                pct = 0.40
+            elif fare_class_upper in ["W", "S", "A"]: # Premium Econ
+                pct = 0.30
+            elif fare_class_upper in ["Y", "B", "M"]: # Full Econ
+                pct = 0.25
+            elif fare_class_upper in ["U", "K", "H", "L", "Q", "T"]: # Mid Econ
+                pct = 0.20
+            elif fare_class_upper in ["V", "X", "N", "R", "G"]: # Discount Econ
+                pct = 0.10
+            else:
+                pct = 0.10 # Fallback
+                
+            mqds = int(distance * pct)
+        else:
+            method = "Delta Revenue-based Earning"
+            base_fare = ticket_price * 0.90
+            mqds = int(base_fare)
+            
+        ratio = mqds / max(1.0, ticket_price)
+        
+        return {
+            "carrier": carrier.title(),
+            "distance": distance,
+            "fare_class": fare_class_upper,
+            "ticket_price": ticket_price,
+            "mqds_earned": mqds,
+            "mqd_ratio": ratio,
+            "method": method,
+            "is_optimized": ratio >= 1.0
+        }

@@ -261,8 +261,8 @@ def test_cli_memory_compact_commands():
 
 def test_cli_run_interactive_routers():
     """Test 'run' command interactive routes for travel, work, and projects."""
-    # Test travel router choice '3' (Exit)
-    result_travel = runner.invoke(app, ["run", "travel"], input="3\n")
+    # Test travel router choice '5' (Exit)
+    result_travel = runner.invoke(app, ["run", "travel"], input="5\n")
     assert result_travel.exit_code == 0
     assert "Exited Travel loop." in result_travel.stdout
 
@@ -644,3 +644,95 @@ def test_travel_ingestion_optimizations(tmp_path):
         assert pdf_trip["metadata"]["parsed_data"]["carrier"] == "Delta Airlines"
         assert pdf_trip["metadata"]["parsed_data"]["flight_number"] == "DL100"
         assert pdf_trip["metadata"]["parsed_data"]["confirmation_code"] == "GDR5CV"
+
+
+def test_delta_mqd_status_and_calculator(setup_test_db, tmp_path):
+    """Test YTD MQD status tracking, partner optimizer calculations, and their respective CLI commands."""
+    import datetime
+    travel = TravelDomain(setup_test_db)
+    
+    # 1. Test partner MQD calculation directly
+    # Delta flight (revenue basis)
+    delta_res = travel.calculate_partner_mqd("Delta Airlines", 3000, "X", 800)
+    assert delta_res["mqds_earned"] == 720  # 90% of 800
+    assert delta_res["mqd_ratio"] == pytest.approx(0.9, abs=0.01)
+    assert not delta_res["is_optimized"]
+    
+    # Partner Business (Air France)
+    af_res = travel.calculate_partner_mqd("Air France", 5000, "J", 1500)
+    assert af_res["mqds_earned"] == 2000  # 40% of 5000
+    assert af_res["mqd_ratio"] == pytest.approx(1.33, abs=0.01)
+    assert af_res["is_optimized"]
+    
+    # 2. Seed some travel memories to test YTD summary
+    year = datetime.date.today().year
+    
+    # Add a card headstart memory
+    travel.manager.add_memory(
+        category="travel",
+        content=f"Card Headstart: Reserve\nDate: {year}-01-15\nMQDs: $2,500",
+        metadata={
+            "type": "card_headstart",
+            "card_name": "Amex Reserve",
+            "start_date": f"{year}-01-15",
+            "end_date": f"{year}-01-15",
+            "mqds": 2500
+        }
+    )
+    
+    # Add a flight memory
+    travel.manager.add_memory(
+        category="travel",
+        content=f"Parsed Flight Travel Confirmation for JFK to AMS.\nDates: {year}-03-10 to {year}-03-15\nCarrier: Delta Airlines, Flight #: DL100\nMetrics: 3,500 Miles, $1,200 MQDs",
+        metadata={
+            "type": "travel_confirmation",
+            "destination": "AMS",
+            "start_date": f"{year}-03-10",
+            "end_date": f"{year}-03-15",
+            "parsed_data": {
+                "type": "flight",
+                "carrier": "Delta Airlines",
+                "flight_number": "DL100",
+                "mqds": 1200
+            }
+        }
+    )
+    
+    # Fetch summary and check metrics
+    summary = travel.get_ytd_mqd_summary(year=year)
+    assert summary["total_mqds"] == 3700
+    assert summary["breakdown"]["flights"] == 1200
+    assert summary["breakdown"]["headstarts"] == 2500
+    
+    # Silver status target is 5000, so remaining should be 1300
+    assert summary["tiers"]["Silver"]["needed"] == 1300
+    assert summary["tiers"]["Silver"]["percentage"] == pytest.approx(74.0, abs=0.1)
+    
+    # 3. Test CLI travel status
+    result_status = runner.invoke(app, ["travel", "status", "--year", str(year)])
+    assert result_status.exit_code == 0
+    assert "Delta Medallion Status Tracker" in result_status.stdout
+    assert "$3,700" in result_status.stdout
+    
+    # 4. Test CLI travel optimize
+    result_opt = runner.invoke(app, [
+        "travel", "optimize",
+        "--carrier", "KLM",
+        "--distance", "6000",
+        "--class", "W",
+        "--price", "1200"
+    ])
+    assert result_opt.exit_code == 0
+    assert "Flight MQD Optimization Report" in result_opt.stdout
+    assert "Estimated MQDs Earned: $1,800" in result_opt.stdout
+    assert "HIGHLY OPTIMIZED ROUTE" in result_opt.stdout
+    
+    # 5. Test CLI travel run loop for status and optimize
+    result_loop_status = runner.invoke(app, ["run", "travel"], input="3\n")
+    assert result_loop_status.exit_code == 0
+    assert "Delta Medallion Status Tracker" in result_loop_status.stdout
+    
+    result_loop_opt = runner.invoke(app, ["run", "travel"], input="4\nKLM\n6000\nW\n1200\n")
+    assert result_loop_opt.exit_code == 0
+    assert "Flight MQD Optimization Report" in result_loop_opt.stdout
+

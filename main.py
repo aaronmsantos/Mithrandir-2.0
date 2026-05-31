@@ -500,6 +500,17 @@ def travel_add(
     packing_list: Optional[str] = typer.Option(None, "--packing", "-p", help="Comma-separated packing items"),
 ):
     """✈️ Log a new travel itinerary and packing list."""
+    if not isinstance(destination, str):
+        destination = None
+    if not isinstance(start_date, str):
+        start_date = None
+    if not isinstance(end_date, str):
+        end_date = None
+    if not isinstance(activities, str):
+        activities = None
+    if not isinstance(packing_list, str):
+        packing_list = None
+
     if not destination:
         destination = typer.prompt("Destination")
     if not start_date:
@@ -551,8 +562,36 @@ def travel_import(
             raise typer.Exit(code=1)
             
         if path.is_file():
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
+            is_activity_pdf = False
+            content = ""
+            if path.suffix.lower() == ".pdf":
+                try:
+                    import pypdf
+                    reader = pypdf.PdfReader(path)
+                    content = "\n".join([page.extract_text() or "" for page in reader.pages]).strip()
+                    if "mqd headstart" in content.lower() or "mqd boost" in content.lower():
+                        is_activity_pdf = True
+                except Exception as e:
+                    console.print(f"[bold red]❌ Failed to read PDF: {e}[/bold red]")
+                    raise typer.Exit(code=1)
+            else:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    
+            if is_activity_pdf:
+                console.print(f"[bold magenta]⚡️ Detected Delta Account Activity statement. Ingesting transactions...[/bold magenta]")
+                res = travel.ingest_pdf_activities(path)
+                console.print(f"[bold green]✨ Success![/bold green] Ingested {res['added']} new transactions, enriched {res['enriched']} existing flights.")
+                summary = travel.get_ytd_mqd_summary()
+                console.print(Panel(
+                    f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
+                    f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Target)\n"
+                    f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]\n"
+                    f"  Days Remaining: [bold white]{summary['days_remaining']}[/bold white]",
+                    title="💎 Diamond Status Tracker 💎",
+                    border_style="cyan"
+                ))
+                return
                 
             parsed = travel.parse_travel_confirmation(content)
             
@@ -585,6 +624,16 @@ def travel_import(
                 
                 # Show parsed details
                 _render_travel_details(travel.manager.get_memory(memory_id)["metadata"]["parsed_data"])
+                
+                # Print pacing update
+                summary = travel.get_ytd_mqd_summary()
+                console.print(Panel(
+                    f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
+                    f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Medallion)\n"
+                    f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]",
+                    title="⚡ Pacing Update ⚡",
+                    border_style="cyan"
+                ))
             except Exception as e:
                 console.print(f"[bold red]❌ Import failed: {e}[/bold red]")
                 raise typer.Exit(code=1)
@@ -596,6 +645,14 @@ def travel_import(
             ids = travel.import_confirmation_files(path, audit_callback=audit_cb)
             if ids:
                 console.print(f"[bold green]✨ Success![/bold green] Successfully imported {len(ids)} travel confirmations.")
+                summary = travel.get_ytd_mqd_summary()
+                console.print(Panel(
+                    f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
+                    f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Medallion)\n"
+                    f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]",
+                    title="⚡ Pacing Update ⚡",
+                    border_style="cyan"
+                ))
             else:
                 console.print("[bold yellow]No confirmation files found to process. ✈️[/bold yellow]")
     else:
@@ -608,6 +665,14 @@ def travel_import(
         ids = travel.import_confirmation_files(incoming_dir, audit_callback=audit_cb)
         if ids:
             console.print(f"[bold green]✨ Success![/bold green] Successfully imported {len(ids)} travel confirmations.")
+            summary = travel.get_ytd_mqd_summary()
+            console.print(Panel(
+                f"[bold cyan]✈️ YTD Status Update ({summary['year']})[/bold cyan]\n"
+                f"  Total MQDs: [bold green]${summary['total_mqds']:,}[/bold green] / $28,000 (Diamond Medallion)\n"
+                f"  Daily Pacing to Target: [bold yellow]${summary['daily_pace_required']:.2f}/day[/bold yellow]",
+                title="⚡ Pacing Update ⚡",
+                border_style="cyan"
+            ))
         else:
             console.print("[bold yellow]No confirmation files found in default incoming directory. ✈️[/bold yellow]")
 
@@ -666,6 +731,157 @@ def travel_list():
             ", ".join(packs)
         )
     console.print(table)
+
+
+@travel_app.command("status")
+def travel_status(
+    year: Optional[int] = typer.Option(None, "--year", "-y", help="Year to summarize. Defaults to current year.")
+):
+    """✈️ View Delta Medallion qualification progress and YTD pacing."""
+    if not isinstance(year, int):
+        year = None
+
+    travel = TravelDomain()
+    summary = travel.get_ytd_mqd_summary(year=year)
+    
+    total_mqds = summary["total_mqds"]
+    breakdown = summary["breakdown"]
+    days_left = summary["days_remaining"]
+    pace = summary["daily_pace_required"]
+    
+    # Header Panel
+    console.print(Panel(
+        f"[bold cyan]✈️ Delta Medallion Status Tracker ({summary['year']}) 💎[/bold cyan]\n"
+        f"Compounded YTD MQDs: [bold green]${total_mqds:,}[/bold green]",
+        border_style="cyan"
+    ))
+    
+    # Breakdown Table
+    breakdown_table = Table(title="📈 MQD Breakdown", show_header=True, header_style="bold magenta", box=None)
+    breakdown_table.add_column("Category", style="cyan")
+    breakdown_table.add_column("MQDs", style="green bold")
+    breakdown_table.add_row("Flights", f"${breakdown['flights']:,}")
+    breakdown_table.add_row("Card Headstarts", f"${breakdown['headstarts']:,}")
+    breakdown_table.add_row("Card Boosts", f"${breakdown['boosts']:,}")
+    breakdown_table.add_row("Other", f"${breakdown['other']:,}")
+    console.print(breakdown_table)
+    
+    # Progress bars toward tiers
+    console.print("\n[bold yellow]🏆 Medallion Tier Progress:[/bold yellow]")
+    def get_progress_bar(percentage: float, width: int = 20) -> str:
+        filled = int(percentage / 100 * width)
+        bar = "█" * filled + "░" * (width - filled)
+        if percentage >= 100:
+            color = "green"
+        elif percentage >= 50:
+            color = "yellow"
+        else:
+            color = "red"
+        return f"[{color}]{bar}[/{color}] {percentage:.1f}%"
+
+    for tier_name, tier_info in summary["tiers"].items():
+        bar_str = get_progress_bar(tier_info["percentage"])
+        needed_str = f"[green]Secured! 🎉[/green]" if tier_info["needed"] == 0 else f"[red]${tier_info['needed']:,} needed[/red]"
+        console.print(f"  [bold white]{tier_name:<10}[/bold white] (Target: ${tier_info['threshold']:,}): {bar_str} | {needed_str}")
+        
+    # Pacing Card
+    console.print("\n[bold magenta]📅 Diamond Medallion Pacing Rules:[/bold magenta]")
+    if summary["tiers"]["Diamond"]["needed"] == 0:
+        console.print("  🎉 [bold green]Congratulations! You have achieved Diamond Medallion Status! 💎[/bold green]")
+    else:
+        console.print(f"  Remaining Days in Year: [bold white]{days_left}[/bold white]")
+        console.print(f"  Target Diamond Threshold: [bold white]$28,000 MQDs[/bold white]")
+        console.print(f"  Required Daily Pacing: [bold yellow]${pace:.2f}/day[/bold yellow]")
+        
+    # Flights and Card transactions list
+    if summary["flights"]:
+        console.print("\n[bold cyan]✈️ Flights Posted YTD:[/bold cyan]")
+        flights_table = Table(show_header=True, header_style="bold cyan")
+        flights_table.add_column("Date", style="white")
+        flights_table.add_column("Route", style="yellow")
+        flights_table.add_column("Carrier", style="magenta")
+        flights_table.add_column("Flight #", style="cyan")
+        flights_table.add_column("MQDs Earned", style="green bold")
+        flights_table.add_column("Status", style="blue")
+        for f in summary["flights"]:
+            flights_table.add_row(
+                f["date"],
+                f["route"],
+                f["carrier"],
+                f["flight_number"] or "N/A",
+                f"${f['mqds']:,}",
+                f["status"]
+            )
+        console.print(flights_table)
+        
+    if summary["cards"]:
+        console.print("\n[bold magenta]💳 Card Benefits Posted YTD:[/bold magenta]")
+        cards_table = Table(show_header=True, header_style="bold magenta")
+        cards_table.add_column("Date", style="white")
+        cards_table.add_column("Type", style="cyan")
+        cards_table.add_column("Card Name", style="yellow")
+        cards_table.add_column("MQDs Earned", style="green bold")
+        for c in summary["cards"]:
+            cards_table.add_row(
+                c["date"],
+                c["type"],
+                c["name"],
+                f"${c['mqds']:,}"
+            )
+        console.print(cards_table)
+
+
+@travel_app.command("optimize")
+def travel_optimize(
+    carrier: Optional[str] = typer.Option(None, "--carrier", "-c", help="Carrier airline name"),
+    distance: Optional[float] = typer.Option(None, "--distance", "-d", help="Distance in miles"),
+    fare_class: Optional[str] = typer.Option(None, "--class", "-cl", help="Fare class letter (e.g. J, W, Y, K, V)"),
+    price: Optional[float] = typer.Option(None, "--price", "-p", help="Ticket price in dollars"),
+):
+    """✈️ Evaluate a flight option's MQD earning potential and MQD-to-Cost ratio."""
+    if not isinstance(carrier, str):
+        carrier = None
+    if not isinstance(distance, (int, float)):
+        distance = None
+    if not isinstance(fare_class, str):
+        fare_class = None
+    if not isinstance(price, (int, float)):
+        price = None
+
+    if not carrier:
+        carrier = typer.prompt("Carrier")
+    if not distance:
+        distance = typer.prompt("Distance (in miles)", type=float)
+    if not fare_class:
+        fare_class = typer.prompt("Fare Class (letter)")
+    if not price:
+        price = typer.prompt("Ticket Price ($)", type=float)
+        
+    travel = TravelDomain()
+    res = travel.calculate_partner_mqd(
+        carrier=carrier,
+        distance=distance,
+        fare_class=fare_class,
+        ticket_price=price
+    )
+    
+    # Beautiful presentation
+    console.print(Panel(
+        f"[bold cyan]✈️ Flight MQD Optimization Report[/bold cyan] 📊\n\n"
+        f"  Carrier: [bold white]{res['carrier']}[/bold white]\n"
+        f"  Distance: [bold white]{res['distance']:,} miles[/bold white]\n"
+        f"  Fare Class: [bold white]{res['fare_class']}[/bold white]\n"
+        f"  Ticket Price: [bold white]${res['ticket_price']:.2f}[/bold white]\n\n"
+        f"  Calculation Method: [yellow]{res['method']}[/yellow]\n"
+        f"  Estimated MQDs Earned: [bold green]${res['mqds_earned']:,}[/bold green]\n"
+        f"  MQD-to-Cost Ratio: [bold cyan]{res['mqd_ratio']:.2f}[/bold cyan] [dim](MQDs earned per $1 spent)[/dim]",
+        border_style="cyan"
+    ))
+    
+    if res["is_optimized"]:
+        console.print("🚀 [bold green]HIGHLY OPTIMIZED ROUTE! (MQD Ratio >= 1.0)[/bold green] This option is extremely efficient for status qualification.")
+    else:
+        console.print("[dim yellow]⚠️ Sub-optimal MQD ratio (< 1.0). Consider alternative SkyTeam partner routes or fare classes if searching for status runs.[/dim yellow]")
 
 
 
@@ -1005,11 +1221,15 @@ def run(
     
     if dom == "travel":
         console.print(Panel("✈️ [bold cyan]Travel Domain Interactive Console[/bold cyan] ✈️", border_style="cyan"))
-        choice = typer.prompt("Select action: [1] Add Itinerary, [2] List Itineraries, [3] Exit")
+        choice = typer.prompt("Select action: [1] Add Itinerary, [2] List Itineraries, [3] View MQD Status, [4] Optimize Flight, [5] Exit")
         if choice == "1":
             travel_add()
         elif choice == "2":
             travel_list()
+        elif choice == "3":
+            travel_status()
+        elif choice == "4":
+            travel_optimize()
         else:
             console.print("[yellow]Exited Travel loop.[/yellow]")
             
