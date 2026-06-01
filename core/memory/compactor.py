@@ -340,15 +340,47 @@ def run(
     limit: int = typer.Option(50, help="Number of recent memories to analyze."),
     db: Optional[str] = typer.Option(None, help="Custom database file path.")
 ):
-    """Run Mithrandir 2.0 Memory Compaction loop."""
+    """Run Mithrandir 2.0 Memory Compaction loop with background threading."""
+    import threading
+    import sys
+    import time
+
     db_path = Path(db) if db else None
     compactor = MemoryCompactor(db_path)
-    try:
-        updated = compactor.run_compaction(limit=limit)
-        print(f"⚡️ Compactor completed successfully. Playbooks updated: {updated}")
-    except Exception as e:
-        print(f"❌ Error executing compactor: {e}")
+
+    result = {"updated": 0, "error": None, "done": False}
+
+    def worker():
+        try:
+            result["updated"] = compactor.run_compaction(limit=limit)
+        except Exception as e:
+            result["error"] = e
+        finally:
+            result["done"] = True
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+
+    spinner_chars = ["|", "/", "-", "\\"]
+    idx = 0
+    sys.stdout.write("Compacting memories in the background... ")
+    sys.stdout.flush()
+
+    while not result["done"]:
+        char = spinner_chars[idx % len(spinner_chars)]
+        sys.stdout.write(f"\rCompacting memories in the background... {char}")
+        sys.stdout.flush()
+        idx += 1
+        time.sleep(0.1)
+
+    sys.stdout.write("\rCompacting memories in the background... Done!\n")
+    sys.stdout.flush()
+
+    if result["error"]:
+        print(f"❌ Error executing compactor: {result['error']}")
         raise typer.Exit(code=1)
+    else:
+        print(f"⚡️ Compactor completed successfully. Playbooks updated: {result['updated']}")
 
 if __name__ == "__main__":
     app()

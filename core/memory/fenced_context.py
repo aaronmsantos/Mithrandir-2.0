@@ -35,26 +35,37 @@ def escape_xml(text: str) -> str:
             .replace("'", "&apos;")
     )
 
-def get_fenced_context(query: Optional[str] = None, category: Optional[str] = None) -> str:
+def get_fenced_context(
+    query: Optional[str] = None,
+    category: Optional[str] = None,
+    token_budget: int = 4000,
+    similarity_threshold: float = 0.0
+) -> str:
     """
     Query the durable memory layer for relevant memories and playbook rules,
     then compile them into an XML-fenced block suitable for ingestion by the LLM.
+    Prunes results dynamically based on a token budget and a similarity threshold.
     
     Args:
         query: Search string to filter memories and playbook topics.
         category: Category string to filter memories (e.g. 'journal', 'investing', etc.).
+        token_budget: Maximum allowed estimated tokens (1 token approx 4 characters).
+        similarity_threshold: Minimum similarity score for semantic search results.
         
     Returns:
         XML string enclosed in <recalled_context> tags.
     """
-    logger.info(f"Retrieving fenced context (query: {query}, category: {category})")
+    logger.info(f"Retrieving fenced context (query: {query}, category: {category}, budget: {token_budget}, threshold: {similarity_threshold})")
     
     manager = MemoryManager()
     
     # 1. Retrieve and filter memories
     if query:
-        # Fetch semantic search results
+        # Fetch semantic search results (which include a 'similarity' score)
         vector_results = manager.semantic_search_memories(query=query, category=category, limit=5)
+        # Filter vector results by similarity threshold
+        vector_results = [m for m in vector_results if m.get("similarity", 0.0) >= similarity_threshold]
+        
         # Fetch keyword search results
         fts_results = manager.search_memories(query=query, category=category)
         
@@ -68,12 +79,14 @@ def get_fenced_context(query: Optional[str] = None, category: Optional[str] = No
         for m in fts_results:
             if m["id"] not in seen_ids:
                 seen_ids.add(m["id"])
+                m["similarity"] = m.get("similarity", 0.8)  # Default high similarity for keyword matches
                 memories.append(m)
         
-        # Sort merged memories chronologically (most recent first)
-        memories.sort(key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
+        # Sort merged memories: primary by similarity score descending, secondary by timestamp/id descending
+        memories.sort(key=lambda x: (x.get("similarity", 0.0), x.get("timestamp", ""), x.get("id", 0)), reverse=True)
     else:
         memories = manager.search_memories(query=None, category=category)
+        memories.sort(key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
     
     # 2. Retrieve and filter playbook topics
     all_playbooks = manager.list_playbook_topics()
@@ -91,47 +104,81 @@ def get_fenced_context(query: Optional[str] = None, category: Optional[str] = No
     else:
         matched_playbooks = all_playbooks
 
-    # 3. Construct XML string
+    # 3. Construct XML string incrementally with token budget pruning
+    current_text = "<recalled_context>\n</recalled_context>"
+    base_tokens = len(current_text) // 4
+    used_tokens = base_tokens
+    
+    final_memories = []
+    final_playbooks = []
+    
+    # Add memories that fit in the budget
+    for m in memories:
+        m_id = m["id"]
+        cat = escape_xml(m["category"])
+        ts = escape_xml(m["timestamp"])
+        content = escape_xml(m["content"])
+        
+        meta_attrs = ""
+        if m["metadata"]:
+            meta_str = ", ".join(f"{k}={v}" for k, v in m["metadata"].items())
+            meta_attrs = f" metadata=\"{escape_xml(meta_str)}\""
+            
+        memory_xml = (
+            f"    <memory id=\"{m_id}\" category=\"{cat}\" timestamp=\"{ts}\"{meta_attrs}>\n"
+            f"      {content}\n"
+            f"    </memory>\n"
+        )
+        memory_tokens = len(memory_xml) // 4
+        
+        if used_tokens + memory_tokens <= token_budget:
+            final_memories.append(memory_xml)
+            used_tokens += memory_tokens
+        else:
+            logger.info(f"Memory ID {m_id} pruned due to token budget constraint.")
+            
+    # Add playbook topics that fit in the budget
+    for p in matched_playbooks:
+        topic = escape_xml(p["topic"])
+        updated_at = escape_xml(p["updated_at"])
+        summary = escape_xml(p["summary"])
+        
+        rules_xml = ""
+        for rule in p["rules"]:
+            escaped_rule = escape_xml(rule)
+            rules_xml += f"        <rule>{escaped_rule}</rule>\n"
+            
+        playbook_xml = (
+            f"    <topic name=\"{topic}\" updated_at=\"{updated_at}\">\n"
+            f"      <summary>{summary}</summary>\n"
+            f"      <rules>\n"
+            f"{rules_xml}"
+            f"      </rules>\n"
+            f"    </topic>\n"
+        )
+        playbook_tokens = len(playbook_xml) // 4
+        
+        if used_tokens + playbook_tokens <= token_budget:
+            final_playbooks.append(playbook_xml)
+            used_tokens += playbook_tokens
+        else:
+            logger.info(f"Playbook topic '{p['topic']}' pruned due to token budget constraint.")
+
+    # Construct final formatted XML context
     lines = ["<recalled_context>"]
     
-    # Add memories section
-    if memories:
+    if final_memories:
         lines.append("  <memories>")
-        for m in memories:
-            m_id = m["id"]
-            cat = escape_xml(m["category"])
-            ts = escape_xml(m["timestamp"])
-            content = escape_xml(m["content"])
-            
-            # Format metadata
-            meta_attrs = ""
-            if m["metadata"]:
-                meta_str = ", ".join(f"{k}={v}" for k, v in m["metadata"].items())
-                meta_attrs = f" metadata=\"{escape_xml(meta_str)}\""
-                
-            lines.append(f"    <memory id=\"{m_id}\" category=\"{cat}\" timestamp=\"{ts}\"{meta_attrs}>")
-            lines.append(f"      {content}")
-            lines.append("    </memory>")
+        for m_xml in final_memories:
+            lines.append(m_xml.rstrip())
         lines.append("  </memories>")
     else:
         lines.append("  <memories />")
-
-    # Add playbook section
-    if matched_playbooks:
+        
+    if final_playbooks:
         lines.append("  <playbook>")
-        for p in matched_playbooks:
-            topic = escape_xml(p["topic"])
-            updated_at = escape_xml(p["updated_at"])
-            summary = escape_xml(p["summary"])
-            
-            lines.append(f"    <topic name=\"{topic}\" updated_at=\"{updated_at}\">")
-            lines.append(f"      <summary>{summary}</summary>")
-            lines.append("      <rules>")
-            for rule in p["rules"]:
-                escaped_rule = escape_xml(rule)
-                lines.append(f"        <rule>{escaped_rule}</rule>")
-            lines.append("      </rules>")
-            lines.append("    </topic>")
+        for p_xml in final_playbooks:
+            lines.append(p_xml.rstrip())
         lines.append("  </playbook>")
     else:
         lines.append("  <playbook />")
@@ -139,5 +186,5 @@ def get_fenced_context(query: Optional[str] = None, category: Optional[str] = No
     lines.append("</recalled_context>")
     
     xml_context = "\n".join(lines)
-    logger.info(f"Retrieved {len(memories)} memories and {len(matched_playbooks)} playbook topics.")
+    logger.info(f"Retrieved {len(final_memories)} memories and {len(final_playbooks)} playbook topics after budget-based pruning.")
     return xml_context

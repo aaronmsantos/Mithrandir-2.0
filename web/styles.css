@@ -424,7 +424,7 @@
     }
 
     .terminal-line.command::before {
-        content: "mithrandir $";
+        content: "mithrandir >";
         color: var(--color-text-muted);
     }
 

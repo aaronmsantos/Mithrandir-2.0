@@ -1,6 +1,6 @@
 # 🔮 Mithrandir 2.0 Agent Guidelines ✨
 
-You are operating inside **Mithrandir 2.0**—a local-first, low-entropy operating system and agent control plane built from first principles for Aaron. This workspace is a compounding leverage engine.
+You are operating inside **Mithrandir 2.0**, a local-first, low-entropy operating system and agent control plane built from first principles for Aaron. This workspace is a compounding leverage engine.
 
 ---
 
@@ -64,14 +64,14 @@ Maintain and run the Confluence Calculator (`domains/investing.py`) which scores
 
 ## 5) CLI Commands 🛠️
 Use the Typer app to run the suit:
-*   `python main.py doctor` — Run diagnostics.
-*   `python main.py journal write` / `list` / `search [query]` — Manage thoughts & feelings.
-*   `python main.py invest calculate` / `list` — Confluence trading analysis.
-*   `python main.py chat [message]` — Agent-first chat with fenced context injection.
-*   `python main.py memory compact` — Compact raw logs into playbook rules.
-*   `python main.py memory export` — Export database memories to a timestamped JSON file.
-*   `python main.py prompt translate [--text "raw instructions"]` — Translate raw text to Machine English.
-*   `python main.py travel/work/projects [list/add]` — Domain tracking.
+*   `python main.py doctor` - Run diagnostics.
+*   `python main.py journal write` / `list` / `search [query]` - Manage thoughts & feelings.
+*   `python main.py invest calculate` / `list` - Confluence trading analysis.
+*   `python main.py chat [message]` - Agent-first chat with fenced context injection.
+*   `python main.py memory compact` - Compact raw logs into playbook rules.
+*   `python main.py memory export` - Export database memories to a timestamped JSON file.
+*   `python main.py prompt translate [--text "raw instructions"]` - Translate raw text to Machine English.
+*   `python main.py travel/work/projects [list/add]` - Domain tracking.
 
 ---
 

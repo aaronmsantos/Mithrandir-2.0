@@ -140,3 +140,233 @@ Do not include any preamble, conversational text, or markdown code block wrapper
                         })
 
         return violations
+
+    def critique_draft(self, draft_text: str, deal_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Critiques a draft (e.g. email, proposal) against deal facts and playbook rules.
+        Runs a 3-tier critique:
+          1. Fact Verification (deal attributes matching memory)
+          2. Voice & Altitude Register Alignment
+          3. Playbook / Win-Formula Compliance
+        Provides specific sentence rewrites.
+        """
+        # 1. Retrieve deal details from memories
+        deal_memories = []
+        if deal_name:
+            deal_memories = self.manager.search_memories(query=deal_name, category="work")
+            if not deal_memories:
+                deal_memories = self.manager.semantic_search_memories(query=deal_name, category="work", limit=3)
+        else:
+            all_work = self.manager.search_memories(category="work")
+            deal_memories = [m for m in all_work if m.get("metadata", {}).get("type") == "gtm_deal"]
+
+        # Format deal context
+        deal_context = ""
+        if deal_memories:
+            deal_context = "Relevant Deal Memories:\n"
+            for m in deal_memories[:3]:
+                deal_context += f"- Date: {m['timestamp']} | Content: {m['content']}\n"
+        else:
+            deal_context = "No specific deal details found in memories.\n"
+
+        # 2. Retrieve playbook rules
+        all_playbooks = self.manager.list_playbook_topics()
+        relevant_rules = []
+        for p in all_playbooks:
+            topic_lower = p["topic"].lower()
+            if any(kw in topic_lower for kw in ["sales", "work", "gtm", "critique", "general"]):
+                relevant_rules.extend(p["rules"])
+        
+        # Fallback GTM/sales rules if database has none
+        if not relevant_rules:
+            relevant_rules = [
+                "Always verify the champion's name is correct.",
+                "Ensure ACV values are accurate and match records.",
+                "Maintain professional altitude and voice.",
+                "Address customer objections directly and clearly.",
+                "State next steps explicitly at the end."
+            ]
+
+        rules_formatted = "\n".join([f"- {r}" for r in relevant_rules])
+
+        # 3. Formulate LLM Prompt
+        prompt = f"""You are the Mithrandir GTM Sentinel Draft Critique Agent.
+Analyze the proposed draft text against the retrieved deal facts and playbook rules.
+
+{deal_context}
+
+Playbook Rules:
+{rules_formatted}
+
+Draft Text:
+---
+{draft_text}
+---
+
+Perform a 3-tier critique and output a JSON response containing:
+1. Fact Verification: Check if the draft conflicts with the stored deal memories (e.g. incorrect ACV, wrong stage, wrong champion).
+2. Voice & Altitude Register Alignment: Assess if the tone and vocabulary align with standard enterprise communication and rules.
+3. Playbook Compliance: Check compliance with playbook rules (e.g. missing signature, unaddressed objections, missing next steps).
+4. Specific Sentence Rewrites: Identify weak or non-compliant sentences and provide a direct before-and-after rewrite.
+
+Output ONLY a JSON object matching this structure:
+{{
+  "fact_verification": [
+    {{
+      "finding": "Description of the fact match or mismatch",
+      "severity": "WARNING/INFO/ERROR",
+      "is_valid": true/false
+    }}
+  ],
+  "voice_alignment": {{
+    "assessment": "Assessment of tone, altitude, and voice register",
+    "score": 100,
+    "issues": ["Issue 1", "Issue 2"]
+  }},
+  "playbook_compliance": [
+    {{
+      "rule": "Rule text",
+      "status": "COMPLIANT/NON_COMPLIANT",
+      "details": "Explanation of compliance status"
+    }}
+  ],
+  "sentence_rewrites": [
+    {{
+      "original": "Original sentence from the draft",
+      "rewritten": "Improved and corrected sentence",
+      "reason": "Why the rewrite is suggested"
+    }}
+  ]
+}}
+
+Ensure that you do not use any dollar sign characters (symbol for dollar) or em-dashes anywhere in your critique or in the output JSON. Return only the raw JSON, with no markdown code block wrappers or other conversational text.
+"""
+        from core.memory.compactor import _call_llm_api
+        response = _call_llm_api(prompt)
+
+        critique_result = None
+        if response:
+            try:
+                # Clean markdown blocks if present
+                clean_text = response.strip()
+                if clean_text.startswith("```"):
+                    lines = clean_text.splitlines()
+                    if lines[0].startswith("```"):
+                        lines = lines[1:]
+                    if lines and lines[-1].startswith("```"):
+                        lines = lines[:-1]
+                    clean_text = "\n".join(lines).strip()
+                
+                critique_result = json.loads(clean_text)
+            except Exception as e:
+                logger.error(f"Failed to parse LLM JSON response during draft critique: {e}. Raw: {response}")
+
+        # Fallback local heuristic critique if LLM is offline/fails
+        if not critique_result:
+            logger.warning("Using local fallback heuristic for draft critique.")
+            critique_result = self._run_local_fallback_critique(draft_text, deal_memories, relevant_rules)
+
+        return critique_result
+
+    def _run_local_fallback_critique(
+        self, draft_text: str, deal_memories: List[Dict[str, Any]], rules: List[str]
+    ) -> Dict[str, Any]:
+        """Local heuristic draft critique if LLM is offline or fails."""
+        facts_list = []
+        issues = []
+        compliance = []
+        rewrites = []
+
+        draft_lower = draft_text.lower()
+
+        # 1. Fact checks
+        for m in deal_memories:
+            meta = m.get("metadata", {})
+            if meta.get("type") == "gtm_deal":
+                deal_name = meta.get("deal_name", "")
+                champion = meta.get("champion", "")
+                acv = meta.get("acv", "")
+
+                # Check if champion is mentioned
+                if champion and champion.lower() not in draft_lower:
+                    facts_list.append({
+                        "finding": f"Champion '{champion}' is not mentioned in the draft.",
+                        "severity": "WARNING",
+                        "is_valid": False
+                    })
+                else:
+                    facts_list.append({
+                        "finding": f"Champion '{champion}' fact check passed.",
+                        "severity": "INFO",
+                        "is_valid": True
+                    })
+
+                # Check if ACV is mentioned
+                if acv and acv.lower() not in draft_lower:
+                    facts_list.append({
+                        "finding": f"ACV amount '{acv}' is not mentioned in the draft.",
+                        "severity": "WARNING",
+                        "is_valid": False
+                    })
+
+        if not facts_list:
+            facts_list.append({
+                "finding": "No historical deal memory facts were found to verify against.",
+                "severity": "INFO",
+                "is_valid": True
+            })
+
+        # 2. Voice & Tone
+        weak_words = ["just checking", "sorry", "hope you are well", "apologize"]
+        for word in weak_words:
+            if word in draft_lower:
+                issues.append(f"Contains passive/weak posture word: '{word}'")
+
+        voice_score = 90 - (len(issues) * 10)
+        voice_score = max(10, min(100, voice_score))
+
+        # 3. Playbook checks
+        for r in rules:
+            r_lower = r.lower()
+            if "always" in r_lower:
+                words = r_lower.split("always")
+                if len(words) > 1:
+                    kw = words[1].strip().split()[0].rstrip(".,")
+                    if len(kw) > 2 and kw not in draft_lower:
+                        compliance.append({
+                            "rule": r,
+                            "status": "NON_COMPLIANT",
+                            "details": f"Missing required aspect: '{kw}'."
+                        })
+                    else:
+                        compliance.append({
+                            "rule": r,
+                            "status": "COMPLIANT",
+                            "details": "Requirement verified."
+                        })
+
+        # 4. Rewrites
+        if "just checking" in draft_lower:
+            rewrites.append({
+                "original": "I am just checking in to see if you had a chance to read it.",
+                "rewritten": "Following up to confirm your feedback on the proposal.",
+                "reason": "Avoid weak opening, state purpose directly."
+            })
+
+        if not compliance:
+            compliance.append({
+                "rule": "Maintain professional altitude.",
+                "status": "COMPLIANT",
+                "details": "Tone seems appropriate."
+            })
+
+        return {
+            "fact_verification": facts_list,
+            "voice_alignment": {
+                "assessment": "Draft shows standard professional tone with minor areas of weak posture." if issues else "Draft shows good professional altitude and alignment.",
+                "score": voice_score,
+                "issues": issues
+            },
+            "playbook_compliance": compliance,
+            "sentence_rewrites": rewrites
+        }

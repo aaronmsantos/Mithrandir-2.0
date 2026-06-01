@@ -1515,5 +1515,112 @@ def run(
         raise typer.Exit(code=1)
 
 
+@app.command("ingest")
+def ingest(
+    file: Path = typer.Option(..., "--file", "-f", help="Path to GTM data file (CSV or transcript)"),
+    type: Optional[str] = typer.Option(None, "--type", "-t", help="File type: csv or transcript"),
+    deal_name: Optional[str] = typer.Option(None, "--deal-name", "-n", help="Optional deal name override/context for transcript ingestion")
+):
+    """💼 Ingest GTM sales data (CSV or call transcripts) into work memory."""
+    if not file.exists():
+        console.print(f"[bold red]❌ File not found at: {file}[/bold red]")
+        raise typer.Exit(code=1)
+
+    inferred_type = type
+    if not inferred_type:
+        suffix = file.suffix.lower()
+        if suffix == ".csv":
+            inferred_type = "csv"
+        elif suffix in [".txt", ".log", ".transcript"]:
+            inferred_type = "transcript"
+        else:
+            console.print("[bold yellow]⚠️ Could not infer file type. Defaulting to transcript.[/bold yellow]")
+            inferred_type = "transcript"
+
+    console.print(f"[bold cyan]💼 Ingesting {inferred_type} GTM data from {file}...[/bold cyan]")
+    from core.memory.ingestion_pipeline import GTM_Ingestion_Pipeline
+    pipeline = GTM_Ingestion_Pipeline()
+
+    try:
+        if inferred_type == "csv":
+            memory_ids = pipeline.ingest_csv(file)
+            console.print(f"[bold green]✨ Success! Ingested {len(memory_ids)} deal records from CSV.[/bold green]")
+        elif inferred_type == "transcript":
+            memory_id = pipeline.ingest_transcript(file, deal_name=deal_name)
+            console.print(f"[bold green]✨ Success! Ingested transcript into memory ID {memory_id}.[/bold green]")
+        else:
+            console.print(f"[bold red]❌ Unsupported ingestion type: {inferred_type}[/bold red]")
+            raise typer.Exit(code=1)
+    except Exception as e:
+        console.print(f"[bold red]❌ Ingestion failed: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+
+@app.command("critique")
+def critique(
+    file: Path = typer.Option(..., "--file", "-f", help="Path to draft text file"),
+    deal: Optional[str] = typer.Option(None, "--deal", "-d", help="Optional target deal name")
+):
+    """💼 Critique a draft email/proposal against deal facts and playbook rules."""
+    if not file.exists():
+        console.print(f"[bold red]❌ Draft file not found at: {file}[/bold red]")
+        raise typer.Exit(code=1)
+
+    with open(file, "r", encoding="utf-8") as f:
+        draft_text = f.read()
+
+    from core.memory.sentinel import DriftSentinel
+    sentinel = DriftSentinel()
+
+    console.print(f"[bold magenta]⚡️ Executing GTM Sentinel draft critique...[/bold magenta]")
+    try:
+        critique_result = sentinel.critique_draft(draft_text, deal_name=deal)
+    except Exception as e:
+        console.print(f"[bold red]❌ Critique execution failed: {e}[/bold red]")
+        raise typer.Exit(code=1)
+
+    # Render results
+    facts = critique_result.get("fact_verification", [])
+    facts_table = Table(show_header=True, header_style="bold cyan", box=None)
+    facts_table.add_column("Finding", style="white")
+    facts_table.add_column("Severity", style="yellow")
+    facts_table.add_column("Valid", style="green")
+    for f in facts:
+        facts_table.add_row(f.get("finding", ""), f.get("severity", ""), "Yes" if f.get("is_valid") else "No")
+    console.print(Panel(facts_table, title="🔍 Tier 1: Fact Verification", border_style="cyan"))
+
+    # Voice Alignment
+    voice = critique_result.get("voice_alignment", {})
+    voice_panel = f"[bold]Assessment:[/bold] {voice.get('assessment', 'N/A')}\n[bold]Score:[/bold] {voice.get('score', 100)}/100"
+    if voice.get("issues"):
+        voice_panel += "\n\n[bold yellow]Issues Detected:[/bold yellow]\n" + "\n".join([f"  - {i}" for i in voice.get("issues", [])])
+    console.print(Panel(voice_panel, title="🗣️ Tier 2: Voice & Altitude Alignment", border_style="green"))
+
+    # Playbook Compliance
+    playbook = critique_result.get("playbook_compliance", [])
+    playbook_table = Table(show_header=True, header_style="bold magenta", box=None)
+    playbook_table.add_column("Rule Checked", style="cyan")
+    playbook_table.add_column("Status", style="white")
+    playbook_table.add_column("Details", style="dim white")
+    for p in playbook:
+        status_val = p.get("status", "")
+        status_style = "green" if status_val == "COMPLIANT" else "red"
+        playbook_table.add_row(p.get("rule", ""), f"[{status_style}]{status_val}[/{status_style}]", p.get("details", ""))
+    console.print(Panel(playbook_table, title="📋 Tier 3: Playbook Compliance", border_style="magenta"))
+
+    # Rewrites
+    rewrites = critique_result.get("sentence_rewrites", [])
+    if rewrites:
+        rewrites_table = Table(show_header=True, header_style="bold yellow", box=None)
+        rewrites_table.add_column("Original Sentence", style="red")
+        rewrites_table.add_column("Suggested Rewrite", style="green")
+        rewrites_table.add_column("Reason", style="white")
+        for r in rewrites:
+            rewrites_table.add_row(r.get("original", ""), r.get("rewritten", ""), r.get("reason", ""))
+        console.print(Panel(rewrites_table, title="✏️ Suggested Sentence Rewrites", border_style="yellow"))
+    else:
+        console.print("[bold green]✨ No sentence rewrites suggested. Good job![/bold green]")
+
+
 if __name__ == "__main__":
     app()
