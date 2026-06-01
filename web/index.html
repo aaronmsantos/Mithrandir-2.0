@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mithrandir 2.0 - Retro Zen Neon Wizardry Control Plane</title>
+    <meta name="description" content="Mithrandir 2.0: Local-first, low-entropy agent control plane and cognitive companion. Built from first principles for Aaron Santos.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Background Neon Gradients -->
+    <div class="neon-glow glow-cyan" aria-hidden="true"></div>
+    <div class="neon-glow glow-magenta" aria-hidden="true"></div>
+
+    <header class="app-header">
+        <div class="header-logo">
+            <span class="logo-icon">🔮</span>
+            <span class="logo-text">MITHRANDIR 2.0</span>
+        </div>
+        <nav class="header-nav">
+            <a href="#terminal-section" class="nav-link">CLI Simulator</a>
+            <a href="#confluence-section" class="nav-link">Confluence TAA</a>
+            <a href="#delta-section" class="nav-link">Delta Medallion</a>
+            <a href="#coords-section" class="nav-link">Operator Coords</a>
+        </nav>
+    </header>
+
+    <main class="app-container">
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <div class="hero-ascii-art" aria-label="ASCII Art Logo">
+<pre>
+  /\/\ (_) |_| |__  _ __ __ _ _ __   __| (_)_ __ 
+ /    \| | __| '_ \| '__/ _` | '_ \ / _` | | '__|
+/ /\/\ \ | |_| | | | | | (_| | | | | (_| | | |   
+\/    \/_|\__|_| |_|_|  \__,_|_| |_|\__,_|_|_|   
+</pre>
+            </div>
+            <h1 class="hero-title">THE NEON SKATER WIZARD CONTROL PLANE</h1>
+            <p class="hero-subtitle">
+                A local-first, low-entropy developer cockpit built from first principles. Orchestrating go-to-market operations, portfolio analytics, and travel qualification hacking.
+            </p>
+            <div class="hero-badges">
+                <span class="badge badge-cyber">🛹 RETRO ZEN</span>
+                <span class="badge badge-neon">🔌 LOCAL-FIRST</span>
+                <span class="badge badge-emerald">🔋 SQLITE WAL</span>
+            </div>
+        </section>
+
+        <!-- Terminal Simulator Section -->
+        <section id="terminal-section" class="dashboard-card terminal-card">
+            <div class="card-header">
+                <div class="header-dots">
+                    <span class="dot dot-red"></span>
+                    <span class="dot dot-yellow"></span>
+                    <span class="dot dot-green"></span>
+                </div>
+                <h2 class="card-title mono-text">mithrandir-control-plane (~/desktop/mithrandir-2.0)</h2>
+            </div>
+            <div class="card-body">
+                <div class="terminal-history" id="terminal-output">
+                    <div class="terminal-line system-msg">🔮 Mithrandir 2.0 system initial startup completed. Type a command or select a shortcut below to execute.</div>
+                </div>
+                <div class="terminal-input-row">
+                    <span class="input-prompt">mithrandir $</span>
+                    <input type="text" id="terminal-cli" class="terminal-input" placeholder="Type help, doctor, chat, invest calculate, travel status..." autocomplete="off" spellcheck="false" aria-label="Terminal command input">
+                </div>
+                <div class="terminal-shortcuts">
+                    <span class="shortcuts-label">Wizard Spells:</span>
+                    <button class="spell-btn" data-cmd="doctor">🔮 doctor</button>
+                    <button class="spell-btn" data-cmd="chat">💬 chat</button>
+                    <button class="spell-btn" data-cmd="invest calculate">📈 invest calculate</button>
+                    <button class="spell-btn" data-cmd="travel status">✈️ travel status</button>
+                    <button class="spell-btn" data-cmd="portfolio status">💼 portfolio status</button>
+                    <button class="spell-btn" data-cmd="memory compact">🧠 memory compact</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Confluence TAA Calculator Section -->
+        <section id="confluence-section" class="grid-layout">
+            <div class="dashboard-card calc-card">
+                <div class="card-header">
+                    <h2 class="card-title">📈 Confluence TAA Calculator</h2>
+                    <p class="card-description">Move the sliders below to calculate the real-time Confluence Score and action suggestions.</p>
+                </div>
+                <div class="card-body">
+                    <form id="confluence-form" class="calc-form">
+                        <!-- Macro Group -->
+                        <fieldset class="slider-group">
+                            <legend class="group-title">Macro Coordinates</legend>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="macro-pivot">Tom Lee Pivot Stance</label>
+                                    <span class="slider-val" id="macro-pivot-val">5.0</span>
+                                </div>
+                                <input type="range" id="macro-pivot" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="macro-cpi">CPI & Liquidity Trend</label>
+                                    <span class="slider-val" id="macro-cpi-val">5.0</span>
+                                </div>
+                                <input type="range" id="macro-cpi" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="macro-flows">ETF Flows & Volatility</label>
+                                    <span class="slider-val" id="macro-flows-val">5.0</span>
+                                </div>
+                                <input type="range" id="macro-flows" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                        </fieldset>
+
+                        <!-- Sentiment Group -->
+                        <fieldset class="slider-group">
+                            <legend class="group-title">Sentiment Indicators</legend>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="sent-fintwit">FinTwit Velocity</label>
+                                    <span class="slider-val" id="sent-fintwit-val">5.0</span>
+                                </div>
+                                <input type="range" id="sent-fintwit" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="sent-cnbc">CNBC Amplitude</label>
+                                    <span class="slider-val" id="sent-cnbc-val">5.0</span>
+                                </div>
+                                <input type="range" id="sent-cnbc" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="sent-skeptics">Skeptics Flow</label>
+                                    <span class="slider-val" id="sent-skeptics-val">5.0</span>
+                                </div>
+                                <input type="range" id="sent-skeptics" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                        </fieldset>
+
+                        <!-- Technical Group -->
+                        <fieldset class="slider-group">
+                            <legend class="group-title">Technical Analytics</legend>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="tech-sr">Support / Resistance</label>
+                                    <span class="slider-val" id="tech-sr-val">5.0</span>
+                                </div>
+                                <input type="range" id="tech-sr" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="tech-momentum">Momentum Slope</label>
+                                    <span class="slider-val" id="tech-momentum-val">5.0</span>
+                                </div>
+                                <input type="range" id="tech-momentum" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                            <div class="slider-control">
+                                <div class="slider-label-row">
+                                    <label for="tech-volume">Volume Divergence</label>
+                                    <span class="slider-val" id="tech-volume-val">5.0</span>
+                                </div>
+                                <input type="range" id="tech-volume" min="1" max="10" step="0.5" value="5.0" class="input-slider">
+                            </div>
+                        </fieldset>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Score display widget -->
+            <div class="dashboard-card score-card">
+                <div class="card-header">
+                    <h2 class="card-title">🛡️ Trading Recommendation</h2>
+                </div>
+                <div class="card-body score-body">
+                    <div class="score-display">
+                        <span class="score-num" id="confluence-score">5.00</span>
+                        <span class="score-label">Confluence Score</span>
+                    </div>
+                    <div class="signal-badge WAIT" id="recommendation-badge">
+                        ⏳ WAIT
+                    </div>
+                    <div class="signal-metrics">
+                        <div class="metric-row">
+                            <span>Macro Average:</span>
+                            <span id="macro-avg" class="metric-val">5.0</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Sentiment Average:</span>
+                            <span id="sent-avg" class="metric-val">5.0</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Technical Average:</span>
+                            <span id="tech-avg" class="metric-val">5.0</span>
+                        </div>
+                    </div>
+                    <div class="confluence-description">
+                        <p id="recommendation-text">The score indicates a neutral stance. Hold off and monitor CPI numbers or technical breakout patterns.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Delta Medallion Pacing Section -->
+        <section id="delta-section" class="grid-layout">
+            <div class="dashboard-card pacing-card">
+                <div class="card-header">
+                    <h2 class="card-title">✈️ Delta Medallion Status Tracker</h2>
+                    <p class="card-description">Check your pacing and see what threshold requirements are needed to hit Diamond Medallion.</p>
+                </div>
+                <div class="card-body">
+                    <div class="mqd-input-group">
+                        <label for="current-mqd" class="mono-text">Current YTD MQDs (in USD):</label>
+                        <div class="mqd-input-wrapper">
+                            <span class="currency-prefix">USD</span>
+                            <input type="number" id="current-mqd" class="mqd-input" value="12850" min="0" max="100000" step="250" aria-label="Current MQDs">
+                        </div>
+                    </div>
+                    
+                    <div class="status-tiers">
+                        <div class="tier-progress-row" id="tier-silver">
+                            <div class="tier-label-row">
+                                <span class="tier-name">Silver Medallion</span>
+                                <span class="tier-status" id="silver-needed">Secured! 🎉</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill silver-fill" style="width: 100%"></div>
+                            </div>
+                            <span class="tier-threshold">Target: 6,000 USD</span>
+                        </div>
+
+                        <div class="tier-progress-row" id="tier-gold">
+                            <div class="tier-label-row">
+                                <span class="tier-name">Gold Medallion</span>
+                                <span class="tier-status" id="gold-needed">Secured! 🎉</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill gold-fill" style="width: 100%"></div>
+                            </div>
+                            <span class="tier-threshold">Target: 12,000 USD</span>
+                        </div>
+
+                        <div class="tier-progress-row" id="tier-platinum">
+                            <div class="tier-label-row">
+                                <span class="tier-name">Platinum Medallion</span>
+                                <span class="tier-status" id="platinum-needed">2,150 USD needed</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill platinum-fill" style="width: 85.6%"></div>
+                            </div>
+                            <span class="tier-threshold">Target: 15,000 USD</span>
+                        </div>
+
+                        <div class="tier-progress-row" id="tier-diamond">
+                            <div class="tier-label-row">
+                                <span class="tier-name">Diamond Medallion</span>
+                                <span class="tier-status" id="diamond-needed">15,150 USD needed</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill diamond-fill" style="width: 45.9%"></div>
+                            </div>
+                            <span class="tier-threshold">Target: 28,000 USD</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pacing Metrics Widget -->
+            <div class="dashboard-card pace-card">
+                <div class="card-header">
+                    <h2 class="card-title">📅 Daily Pacing Requirements</h2>
+                </div>
+                <div class="card-body pace-body">
+                    <div class="pace-stat">
+                        <span class="pace-num" id="pace-value">USD 71.13</span>
+                        <span class="pace-label">Required Daily Pacing</span>
+                    </div>
+                    <div class="pace-stats-grid">
+                        <div class="metric-row">
+                            <span>Remaining Days:</span>
+                            <span id="days-left" class="metric-val">213</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Diamond Target:</span>
+                            <span class="metric-val">28,000 USD</span>
+                        </div>
+                        <div class="metric-row">
+                            <span>Remaining MQDs:</span>
+                            <span id="mqds-remaining" class="metric-val">15,150 USD</span>
+                        </div>
+                    </div>
+                    <p class="pace-note text-wrap-pretty">Pacing is calculated relative to December 31, 2026. Keep compiling partner flight bookings to increase MQD-to-cost efficiency.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Memory System Visualizer Section -->
+        <section id="memory-flow-section" class="dashboard-card visualizer-card">
+            <div class="card-header">
+                <h2 class="card-title">🧠 Durable Memory Compounding Loop</h2>
+                <p class="card-description">Mithrandir 2.0's engine translates short-term context into long-term playbook rules.</p>
+            </div>
+            <div class="card-body">
+                <div class="pipeline-flow">
+                    <div class="pipeline-step">
+                        <div class="step-icon">💬</div>
+                        <h3 class="step-title">Episodic Logs</h3>
+                        <p class="step-desc">Interactive chats, investing metrics, and flight confirmations write to short-term memory.</p>
+                    </div>
+                    <div class="pipeline-arrow">➔</div>
+                    <div class="pipeline-step">
+                        <div class="step-icon">🛡️</div>
+                        <h3 class="step-title">DriftSentinel</h3>
+                        <p class="step-desc">Audits entry content against L2 guidelines. Bypasses trigger manual confirmation prompts.</p>
+                    </div>
+                    <div class="pipeline-arrow">➔</div>
+                    <div class="pipeline-step">
+                        <div class="step-icon">⚙️</div>
+                        <h3 class="step-title">Compactor Loop</h3>
+                        <p class="step-desc">Extracts structured guidelines from the database, compiling summaries to L2 Playbook.</p>
+                    </div>
+                    <div class="pipeline-arrow">➔</div>
+                    <div class="pipeline-step">
+                        <div class="step-icon">💎</div>
+                        <h3 class="step-title">Fenced Context</h3>
+                        <p class="step-desc">Merges SQLite FTS5 index and semantic vector searches into clean XML-fenced inputs.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Operator Coordinates Section -->
+        <section id="coords-section" class="grid-layout cols-3">
+            <!-- Muay Thai Card -->
+            <div class="dashboard-card coords-card">
+                <div class="card-header">
+                    <h2 class="card-title">🦾 Muay Thai Coordinates</h2>
+                </div>
+                <div class="card-body">
+                    <ul class="coords-list">
+                        <li><strong>Cadence:</strong> 3 to 6 sessions per week (1-2 hours)</li>
+                        <li><strong>Training:</strong> Pads with Joe Sharpe, clinch work, drills</li>
+                        <li><strong>Sparring:</strong> Hard sparring or technical flow sessions</li>
+                        <li><strong>Record:</strong> 3 smokers completed since training started in 2017</li>
+                        <li><strong>Gym Role:</strong> Supportive, highly fit peer contributor</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Audio Playlist Card -->
+            <div class="dashboard-card coords-card">
+                <div class="card-header">
+                    <h2 class="card-title">🎵 Audio Playlist (Focus Loop)</h2>
+                </div>
+                <div class="card-body">
+                    <ul class="playlist-list">
+                        <li><span class="music-icon">🎤</span> Currensy & Alchemist</li>
+                        <li><span class="music-icon">🎧</span> Freddie Gibbs & Benny the Butcher</li>
+                        <li><span class="music-icon">🛹</span> Action Bronson</li>
+                        <li><span class="music-icon">💿</span> Currensy & Larry June</li>
+                        <li><span class="music-icon">🎸</span> Refused & Deftones</li>
+                        <li><span class="music-icon">🔊</span> MF Doom & Billy Woods</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Sports Teams Card -->
+            <div class="dashboard-card coords-card">
+                <div class="card-header">
+                    <h2 class="card-title">⚽ Sports Schedule</h2>
+                </div>
+                <div class="card-body">
+                    <div class="team-schedule">
+                        <div class="team-row">
+                            <span class="team-badge knicks">NY KNICKS</span>
+                            <span class="team-desc">Knickerbocker basketball (NBA)</span>
+                        </div>
+                        <div class="team-row">
+                            <span class="team-badge spurs">SPURS</span>
+                            <span class="team-desc">Tottenham Hotspur football (EPL)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>🔮 MITHRANDIR 2.0 &bull; 100% LOCAL-FIRST COMPILING ENGINE &bull; 2026</p>
+    </footer>
+
+    <!-- JS Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
