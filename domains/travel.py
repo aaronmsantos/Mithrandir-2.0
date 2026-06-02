@@ -331,7 +331,7 @@ Ensure:
             result["end_date"] = (today + datetime.timedelta(days=7)).isoformat()
             
         # 5. Destination Heuristic
-        route_match = re.search(r'\b([a-z]{3})\s+(?:to|->|—)\s+([a-z]{3})\b', content_lower)
+        route_match = re.search(r'\b([a-z]{3})\s+(?:to|->|\u2014)\s+([a-z]{3})\b', content_lower)
         if route_match:
             result["destination"] = f"{route_match.group(1).upper()} to {route_match.group(2).upper()}"
         else:
@@ -570,7 +570,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
                 continue
                 
             # 1. Match Flight Route
-            route_match = re.match(r'^([A-Z]{3})\s+([A-Z]{3})(?:\s+([A-Z]{2})\s*(\d{1,4}))?$', line)
+            route_match = re.match(r'^([A-Z]{3})\s+([A-Z]{3})(?:\s+([A-Z]{2})\s*(\d{1,4}))?\Z', line)
             if route_match:
                 origin, dest, carrier_code, flight_num = route_match.groups()
                 
@@ -599,7 +599,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
                         if miles_m:
                             miles = int(miles_m.group(1).replace(",", ""))
                     if mqds is None:
-                        mqds_m = re.search(r'\$?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
+                        mqds_m = re.search(r'\u0024?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
                         if mqds_m:
                             mqds = int(mqds_m.group(1).replace(",", ""))
                     if not ticket:
@@ -640,7 +640,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
                     dt_check = parse_dt(l_next)
                     if dt_check:
                         date = dt_check
-                    mqds_m = re.search(r'\$?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
+                    mqds_m = re.search(r'\u0024?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
                     if mqds_m:
                         mqds = int(mqds_m.group(1).replace(",", ""))
                     next_idx += 1
@@ -670,7 +670,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
                     dt_check = parse_dt(l_next)
                     if dt_check:
                         date = dt_check
-                    mqds_m = re.search(r'\$?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
+                    mqds_m = re.search(r'\u0024?([\d,]+)\s*mqds', l_next, re.IGNORECASE)
                     if mqds_m:
                         mqds = int(mqds_m.group(1).replace(",", ""))
                     next_idx += 1
@@ -846,7 +846,7 @@ Do not include any preamble or markdown code block wrappers. Output only raw JSO
             elif "mqds" in parsed_data:
                 val = int(parsed_data["mqds"]) if parsed_data.get("mqds") is not None else 0
             else:
-                mqd_match = re.search(r'\$?([\d,]+)\s*mqds', mem.get("content", ""), re.IGNORECASE)
+                mqd_match = re.search(r'\u0024?([\d,]+)\s*mqds', mem.get("content", ""), re.IGNORECASE)
                 if mqd_match:
                     val = int(mqd_match.group(1).replace(",", ""))
                     

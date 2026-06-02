@@ -184,7 +184,7 @@ Ensure:
         exp_lines = [l for l in sections_content["experience"] if l]
         date_pattern = re.compile(
             r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December|\d{4})\b'
-            r'.*?\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|–|—|to)\s*.*?'
+            r'.*?\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|–|to)\s*.*?'
             r'\b(Present|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December|\d{4})\b',
             re.IGNORECASE
         )

@@ -136,7 +136,7 @@ class PortfolioDomain:
             # 4. Extract Positions / Holdings Snapshot
             positions = []
             # High-precision regex pattern verified via scan diagnostics
-            position_pattern = r'\b([A-Z0-9./#]{1,8})\s+([CMS])\s+([\d,]+\.?\d*)\s+\$?([\d,]+\.\d{2,4})\s+\$?([\d,]+\.\d{2})\b'
+            position_pattern = r'\b([A-Z0-9./#]{1,8})\s+([CMS])\s+([\d,]+\.?\d*)\s+\x24?([\d,]+\.\d{2,4})\s+\x24?([\d,]+\.\d{2})\b'
             
             for page_idx, page_text in enumerate(text_by_page):
                 norm_text = page_text.replace("\xad", "-").replace("­", "-")
@@ -178,10 +178,10 @@ class PortfolioDomain:
                         is_inc = any(k in line_upper for k in ["DIVIDEND", "INTEREST", "LENDING REBATE"])
                         
                         if is_dep or is_wth or is_inc:
-                            nums = re.findall(r'\-?\$?[\d,]+\.\d{2}', line)
+                            nums = re.findall(r'\-?\x24?[\d,]+\.\d{2}', line)
                             if nums:
                                 try:
-                                    val = float(nums[-1].replace("$", "").replace(",", ""))
+                                    val = float(nums[-1].replace(chr(36), "").replace(",", ""))
                                     raw_txs.append({
                                         "date": date_str,
                                         "amount": val,
