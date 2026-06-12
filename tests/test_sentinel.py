@@ -196,3 +196,58 @@ def test_cli_travel_sentinel_abort(setup_test_db, monkeypatch):
     assert result.exit_code == 1
     assert "Aborted saving itinerary to prevent cognitive drift" in result.stdout
     assert len(manager.search_memories(category="travel")) == 0
+
+
+def test_vector_feedback_alignment(setup_test_db, monkeypatch):
+    """Verify that user overrides are saved to sentinel_feedback and present in compactor formatting."""
+    manager = MemoryManager(setup_test_db)
+    manager.upsert_playbook_topic(
+        topic="Travel",
+        summary="Travel guidelines.",
+        rules=["Always fly Delta."]
+    )
+
+    mock_audit = MagicMock(return_value=[{
+        "rule": "Always fly Delta.",
+        "justification": "Flying United.",
+        "severity": "WARNING"
+    }])
+    monkeypatch.setattr("core.memory.sentinel.DriftSentinel.audit_entry", mock_audit)
+
+    # Invoke travel add, simulate user typing 'y' (override)
+    result = runner.invoke(app, [
+        "travel", "add",
+        "-d", "Paris",
+        "--start", "2026-07-01",
+        "--end", "2026-07-07",
+        "-a", "Louvre",
+        "-p", "Beret"
+    ], input="y\n")
+
+    assert result.exit_code == 0
+    assert "Itinerary logged under travel" in result.stdout
+
+    # Verify override feedback was saved
+    feedback_entries = manager.list_sentinel_feedback()
+    assert len(feedback_entries) == 1
+    assert feedback_entries[0]["category"] == "travel"
+    assert feedback_entries[0]["violation_rule"] == "Always fly Delta."
+    assert feedback_entries[0]["violation_justification"] == "Flying United."
+
+    # Verify compactor loads it in prompt
+    from core.memory.compactor import MemoryCompactor
+    compactor = MemoryCompactor(setup_test_db)
+    
+    # We mock _call_llm_api to just return None (falling back to deterministic) but we check prompt construction
+    mock_llm = MagicMock(return_value=None)
+    monkeypatch.setattr("core.memory.compactor._call_llm_api", mock_llm)
+    
+    compactor.run_compaction(limit=5)
+    
+    # Check that the prompt passed to LLM contained the feedback information
+    assert mock_llm.called
+    prompt_sent = mock_llm.call_args[0][0]
+    assert "Sentinel Override Feedback" in prompt_sent
+    assert "Always fly Delta." in prompt_sent
+    assert "Flying United." in prompt_sent
+

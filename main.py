@@ -63,7 +63,21 @@ def audit_and_confirm(category: str, content: str, metadata: Optional[Dict[str, 
         border_style="red"
     ))
 
-    return typer.confirm("Do you want to proceed with storing this entry despite the drift?", default=False)
+    proceed = typer.confirm("Do you want to proceed with storing this entry despite the drift?", default=False)
+    if proceed:
+        try:
+            manager = MemoryManager()
+            for v in violations:
+                manager.add_sentinel_feedback(
+                    category=category,
+                    content=content,
+                    violation_rule=v.get("rule", "Unknown rule"),
+                    violation_justification=v.get("justification", "No justification provided."),
+                    metadata=metadata
+                )
+        except Exception as e:
+            console.print(f"[dim yellow]⚠️ Failed to record sentinel feedback: {e}[/dim yellow]")
+    return proceed
 
 # Sub-command groups
 journal_app = typer.Typer(name="journal", help="📓 Manage your encrypted personal journal entries.")

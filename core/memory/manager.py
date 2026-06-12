@@ -88,7 +88,7 @@ def decrypt_journal(encrypted_text: str) -> str:
 def get_embedding(text: str) -> Optional[List[float]]:
     """
     Fetch a 768-dimension vector from the Gemini embeddings API
-    (model text-embedding-004) using urllib. Handles offline/missing key scenarios.
+    (model gemini-embedding-2) using urllib. Handles offline/missing key scenarios.
     """
     if not text or not text.strip():
         return None
@@ -101,12 +101,13 @@ def get_embedding(text: str) -> Optional[List[float]]:
         logger.warning("GEMINI_API_KEY is not set or invalid; skipping embedding generation.")
         return None
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={gemini_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key={gemini_key}"
     data = {
-        "model": "models/text-embedding-004",
+        "model": "models/gemini-embedding-2",
         "content": {
             "parts": [{"text": text}]
-        }
+        },
+        "outputDimensionality": 768
     }
 
     try:
@@ -226,6 +227,19 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
             memory_id INTEGER PRIMARY KEY,
             embedding TEXT NOT NULL,
             FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
+        )
+    """)
+    
+    # 7. Create sentinel_feedback table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sentinel_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            category TEXT NOT NULL,
+            content TEXT NOT NULL,
+            violation_rule TEXT NOT NULL,
+            violation_justification TEXT NOT NULL,
+            metadata TEXT DEFAULT '{}'
         )
     """)
     
@@ -524,7 +538,7 @@ class MemoryManager:
 
     def semantic_search_memories(self, query: str, category: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
         """
-        Search memories by vector similarity using Gemini text-embedding-004.
+        Search memories by vector similarity using Gemini gemini-embedding-2.
         Falls back to FTS5 keyword search if offline or missing key.
         """
         query_emb = get_embedding(query)
@@ -659,6 +673,52 @@ class MemoryManager:
         finally:
             conn.close()
 
+    def add_sentinel_feedback(self, category: str, content: str, violation_rule: str, violation_justification: str, metadata: Optional[Dict[str, Any]] = None) -> int:
+        """Save a Sentinel override event to the database to act as vector feedback."""
+        meta_str = json.dumps(metadata or {})
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO sentinel_feedback (category, content, violation_rule, violation_justification, metadata) VALUES (?, ?, ?, ?, ?)",
+                (category, content, violation_rule, violation_justification, meta_str)
+            )
+            feedback_id = cursor.lastrowid
+            conn.commit()
+            logger.info(f"Recorded sentinel feedback ID {feedback_id} for overridden rule '{violation_rule}'")
+            return feedback_id
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to save sentinel feedback: {e}")
+            raise
+        finally:
+            conn.close()
+
+    def list_sentinel_feedback(self) -> List[Dict[str, Any]]:
+        """Retrieve all logged sentinel override feedback events."""
+        conn = self.get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, timestamp, category, content, violation_rule, violation_justification, metadata FROM sentinel_feedback ORDER BY timestamp DESC")
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    "id": row["id"],
+                    "timestamp": row["timestamp"],
+                    "category": row["category"],
+                    "content": row["content"],
+                    "violation_rule": row["violation_rule"],
+                    "violation_justification": row["violation_justification"],
+                    "metadata": json.loads(row["metadata"] or "{}")
+                })
+            return results
+        except Exception as e:
+            logger.error(f"Failed to list sentinel feedback: {e}")
+            raise
+        finally:
+            conn.close()
+
+
     def export_memories(self, export_dir: Optional[Path] = None) -> Path:
         """
         Export all database memories (including decrypted journal entries for backup traceability)
@@ -698,6 +758,7 @@ class MemoryManager:
             cursor.execute("DELETE FROM portfolio_positions")
             cursor.execute("DELETE FROM portfolio_statements")
             cursor.execute("DELETE FROM memory_embeddings")
+            cursor.execute("DELETE FROM sentinel_feedback")
             conn.commit()
             logger.info("Purged all table records from the database.")
         except Exception as e:

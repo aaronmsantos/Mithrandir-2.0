@@ -44,7 +44,7 @@ def _call_llm_api(prompt: str) -> Optional[str]:
     # 1. Try Gemini
     if is_valid(gemini_key):
         logger.info("Accessing Gemini API for memory compilation...")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={gemini_key}"
         data = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"responseMimeType": "application/json"}
@@ -248,13 +248,14 @@ class MemoryCompactor:
         """
         logger.info(f"Executing compaction cycle over the last {limit} memories...")
         
-        # 1. Fetch recent memories
+        # 1. Fetch recent memories and sentinel feedback overrides
         memories = self.manager.search_memories()[:limit]
         if not memories:
             logger.info("No memories found. Aborting compaction loop.")
             return 0
             
         existing_playbook = self.manager.list_playbook_topics()
+        feedback_entries = self.manager.list_sentinel_feedback()[:20]
         
         # Format memories and playbook for the LLM prompt
         memories_formatted = ""
@@ -267,15 +268,31 @@ class MemoryCompactor:
             for r in p["rules"]:
                 playbook_formatted += f"    * {r}\n"
 
+        feedback_formatted = ""
+        if feedback_entries:
+            for f in feedback_entries:
+                feedback_formatted += (
+                    f"- Category: {f['category']} | Timestamp: {f['timestamp']}\n"
+                    f"  Content: {f['content']}\n"
+                    f"  Overridden Rule: {f['violation_rule']}\n"
+                    f"  Sentinel Justification: {f['violation_justification']}\n"
+                )
+        else:
+            feedback_formatted = "No Sentinel override feedback events recorded."
+ 
         prompt = f"""You are the Mithrandir 2.0 Memory Compactor.
-Below is a list of recent memories (recent interaction logs, journals, or events) and the existing playbook topics.
-Your job is to analyze the recent memories, extract actionable rules, guidelines, and insights, and reconcile them with the existing playbook.
+Below is a list of recent memories (recent interaction logs, journals, or events), the existing playbook topics, and any Sentinel Override Feedback.
+
+Sentinel Override Feedback contains instances where the user explicitly chose to override a Sentinel warning and store/save the content anyway. This indicates that the rule was either too strict, outdated, or there is an exception to the rule. You should refine, relax, or update the playbook rules to align with these operator decisions.
 
 Recent memories:
 {memories_formatted}
 
 Existing Playbook:
 {playbook_formatted}
+
+Sentinel Override Feedback:
+{feedback_formatted}
 
 Provide the updated playbook as a JSON object matching the following structure:
 {{
@@ -293,7 +310,7 @@ Provide the updated playbook as a JSON object matching the following structure:
 
 Ensure that:
 1. Rules are concrete, actionable guidelines (e.g., "Always use git stash before switching branches if there are uncommitted changes"). Avoid vague statements.
-2. If a topic already exists in the Existing Playbook, reconcile the old rules with new insights. Do not lose useful old rules, but merge/improve/update them if there is new feedback.
+2. If a topic already exists in the Existing Playbook, reconcile the old rules with new insights and the Sentinel Override Feedback. Do not lose useful old rules, but merge/improve/update/relax them if there is new feedback or user overrides.
 3. Only output valid JSON. Do not include markdown code block wrapper or any other conversational text.
 """
         
